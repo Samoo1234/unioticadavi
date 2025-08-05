@@ -3,27 +3,6 @@
  * Resolve problemas de UTC e padroniza formatos em todo o sistema
  */
 
-// Configuração do timezone brasileiro (UTC-3)
-const BRAZIL_TIMEZONE = 'America/Sao_Paulo'
-
-/**
- * Converte uma data para o timezone brasileiro
- * @param date - Data a ser convertida
- * @returns Data no timezone brasileiro
- */
-export const toBrazilianTimezone = (date: Date | string): Date => {
-  const dateObj = typeof date === 'string' ? new Date(date) : date
-  
-  // Se a data já tem timezone, mantém como está
-  if (dateObj.toString().includes('GMT') || dateObj.toString().includes('UTC')) {
-    return dateObj
-  }
-  
-  // Para datas sem timezone, assume que estão em UTC e converte para horário brasileiro
-  const utcDate = new Date(dateObj.getTime() + (dateObj.getTimezoneOffset() * 60000))
-  return new Date(utcDate.toLocaleString('en-US', { timeZone: BRAZIL_TIMEZONE }))
-}
-
 /**
  * Formata data no padrão brasileiro (dd/mm/aaaa)
  * @param date - Data a ser formatada
@@ -33,11 +12,14 @@ export const formatarData = (date: Date | string): string => {
   if (!date) return ''
   
   try {
-    const dateObj = typeof date === 'string' ? new Date(date) : date
-    const brazilianDate = toBrazilianTimezone(dateObj)
+    const dateObj = typeof date === 'string' ? new Date(date + 'T00:00:00') : date
     
-    return brazilianDate.toLocaleDateString('pt-BR', {
-      timeZone: BRAZIL_TIMEZONE,
+    if (isNaN(dateObj.getTime())) {
+      console.error('Data inválida:', date)
+      return ''
+    }
+    
+    return dateObj.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
@@ -58,10 +40,13 @@ export const formatarDataHora = (date: Date | string): string => {
   
   try {
     const dateObj = typeof date === 'string' ? new Date(date) : date
-    const brazilianDate = toBrazilianTimezone(dateObj)
     
-    return brazilianDate.toLocaleString('pt-BR', {
-      timeZone: BRAZIL_TIMEZONE,
+    if (isNaN(dateObj.getTime())) {
+      console.error('Data inválida:', date)
+      return ''
+    }
+    
+    return dateObj.toLocaleString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -84,10 +69,13 @@ export const formatarHora = (date: Date | string): string => {
   
   try {
     const dateObj = typeof date === 'string' ? new Date(date) : date
-    const brazilianDate = toBrazilianTimezone(dateObj)
     
-    return brazilianDate.toLocaleTimeString('pt-BR', {
-      timeZone: BRAZIL_TIMEZONE,
+    if (isNaN(dateObj.getTime())) {
+      console.error('Data inválida:', date)
+      return ''
+    }
+    
+    return dateObj.toLocaleTimeString('pt-BR', {
       hour: '2-digit',
       minute: '2-digit'
     })
@@ -108,6 +96,12 @@ export const dataBRParaISO = (dataBR: string): string => {
   try {
     const [dia, mes, ano] = dataBR.split('/').map(Number)
     const data = new Date(ano, mes - 1, dia)
+    
+    if (isNaN(data.getTime())) {
+      console.error('Data BR inválida:', dataBR)
+      return ''
+    }
+    
     return data.toISOString().split('T')[0]
   } catch (error) {
     console.error('Erro ao converter data BR para ISO:', error)
@@ -125,6 +119,12 @@ export const dataISOParaBR = (dataISO: string): string => {
   
   try {
     const data = new Date(dataISO + 'T00:00:00')
+    
+    if (isNaN(data.getTime())) {
+      console.error('Data ISO inválida:', dataISO)
+      return ''
+    }
+    
     return formatarData(data)
   } catch (error) {
     console.error('Erro ao converter data ISO para BR:', error)
@@ -133,11 +133,11 @@ export const dataISOParaBR = (dataISO: string): string => {
 }
 
 /**
- * Obtém a data atual no timezone brasileiro
+ * Obtém a data atual
  * @returns Data atual
  */
 export const getDataAtual = (): Date => {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: BRAZIL_TIMEZONE }))
+  return new Date()
 }
 
 /**
@@ -145,7 +145,7 @@ export const getDataAtual = (): Date => {
  * @returns String da data atual
  */
 export const getDataAtualISO = (): string => {
-  return getDataAtual().toISOString().split('T')[0]
+  return new Date().toISOString().split('T')[0]
 }
 
 /**
@@ -201,15 +201,24 @@ export const subtrairDias = (date: Date | string, dias: number): Date => {
  * @returns Nome do dia da semana
  */
 export const getDiaSemana = (date: Date | string): string => {
-  const dateObj = typeof date === 'string' ? new Date(date) : date
-  const brazilianDate = toBrazilianTimezone(dateObj)
-  
-  const diasSemana = [
-    'Domingo', 'Segunda-feira', 'Terça-feira', 
-    'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'
-  ]
-  
-  return diasSemana[brazilianDate.getDay()]
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date + 'T00:00:00') : date
+    
+    if (isNaN(dateObj.getTime())) {
+      console.error('Data inválida para calcular dia da semana:', date)
+      return 'Data inválida'
+    }
+    
+    const diasSemana = [
+      'Domingo', 'Segunda-feira', 'Terça-feira', 
+      'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'
+    ]
+    
+    return diasSemana[dateObj.getDay()]
+  } catch (error) {
+    console.error('Erro ao calcular dia da semana:', error)
+    return 'Erro'
+  }
 }
 
 /**
@@ -220,7 +229,12 @@ export const getDiaSemana = (date: Date | string): string => {
 export const formatarDataComDiaSemana = (date: Date | string): string => {
   const dataFormatada = formatarData(date)
   const diaSemana = getDiaSemana(date)
-  return `${dataFormatada} - ${diaSemana}`
+  
+  if (dataFormatada && diaSemana && diaSemana !== 'Data inválida' && diaSemana !== 'Erro') {
+    return `${dataFormatada} - ${diaSemana}`
+  }
+  
+  return dataFormatada || 'Data inválida'
 }
 
 /**

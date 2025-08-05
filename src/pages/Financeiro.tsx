@@ -31,7 +31,8 @@ import {
   Cancel as CancelIcon,
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
-import { supabase } from '@/services/supabase';
+import { supabase } from '@/services/supabase'
+import { getDiaSemana } from '@/utils/dateUtils';
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -327,11 +328,8 @@ const Financeiro: React.FC = () => {
       
       // Atualizar dia da semana
       if (dataObj.data) {
-        const [dia, mes, ano] = dataObj.data.split('/').map(Number);
-        const dataFormatada = new Date(ano, mes - 1, dia, 12, 0, 0);
-        const diaSemanaFormatado = dataFormatada.toLocaleString('pt-BR', { weekday: 'long' });
-        const diaSemanaCapitalizado = diaSemanaFormatado.charAt(0).toUpperCase() + diaSemanaFormatado.slice(1);
-        setDiaSemana(diaSemanaCapitalizado);
+        const diaSemanaCalculado = getDiaSemana(dataObj.data);
+        setDiaSemana(diaSemanaCalculado);
       }
       
       setIsLoading(false);
@@ -501,16 +499,8 @@ const Financeiro: React.FC = () => {
     if (valor) {
       const dataObj = datas.find(d => d.id === valor);
       if (dataObj && dataObj.data) {
-        const partes = dataObj.data.split('/');
-        const dataFormatada = new Date(
-          parseInt(partes[2], 10),
-          parseInt(partes[1], 10) - 1,
-          parseInt(partes[0], 10),
-          12, 0, 0
-        );
-        const diaSemanaFormatado = dataFormatada.toLocaleString('pt-BR', { weekday: 'long' });
-        const diaSemanaCapitalizado = diaSemanaFormatado.charAt(0).toUpperCase() + diaSemanaFormatado.slice(1);
-        setDiaSemana(diaSemanaCapitalizado);
+        const diaSemanaCalculado = getDiaSemana(dataObj.data);
+        setDiaSemana(diaSemanaCalculado);
       }
     } else {
       setDiaSemana('');
