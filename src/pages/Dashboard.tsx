@@ -40,6 +40,7 @@ import { supabase } from '@/services/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useApp } from '@/contexts/AppContext'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
+import { formatarData, getDataAtualISO } from '@/utils/dateUtils'
 
 
 // Registrar componentes do Chart.js
@@ -200,7 +201,7 @@ export function Dashboard() {
       // const mesAnterior = subMonths(hoje, 1) // removido pois não é utilizado
       // const inicioMesAnterior = startOfMonth(mesAnterior)
       // const fimMesAnterior = endOfMonth(mesAnterior) // removido pois não é utilizado
-      const hojeStr = format(hoje, 'yyyy-MM-dd')
+      const hojeStr = getDataAtualISO()
 
       // Buscar todos os agendamentos
       const { data: agendamentosData } = await supabase

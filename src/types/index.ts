@@ -32,3 +32,6 @@ export {
   TipoNotificacao,
   StatusNotificacao
 } from './database'
+
+// Utilitários de data
+export * from '../utils/dateUtils'

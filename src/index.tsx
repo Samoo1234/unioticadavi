@@ -1,4 +1,4 @@
-import React from 'react'
+// React é importado automaticamente pelo JSX
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'

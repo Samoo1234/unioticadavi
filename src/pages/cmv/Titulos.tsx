@@ -19,12 +19,11 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { supabase } from '@/services/supabase';
+import { formatarData, getDataAtualISO } from '@/utils/dateUtils';
 
 // Função para formatar data no formato dd/mm/yyyy
-const formatarData = (data: string): string => {
-  if (!data) return '';
-  const dataObj = new Date(data + 'T00:00:00');
-  return dataObj.toLocaleDateString('pt-BR');
+const formatarDataLocal = (data: string): string => {
+  return formatarData(data);
 };
 
 // Interface local para o formulário
@@ -264,7 +263,7 @@ const Titulos: React.FC = () => {
         fornecedor_id: fornecedorSelecionado.id,
         filial_id: filialSelecionada.id,
         valor: parseFloat(form.valor),
-        data_emissao: new Date().toISOString().split('T')[0],
+        data_emissao: getDataAtualISO(),
         data_vencimento: form.vencimento || '',
         status: 'pendente' as const,
         observacao: form.observacoes || undefined,
@@ -329,7 +328,7 @@ const Titulos: React.FC = () => {
               filial_id: filialObj.id,
               numero: numeroTitulo,
               tipo: fornecedorObj.tipo,
-              data_emissao: new Date().toISOString().split('T')[0],
+              data_emissao: getDataAtualISO(),
               data_vencimento: item.vencimento,
               valor: parseFloat(item.valor),
               status: 'pendente' as const,

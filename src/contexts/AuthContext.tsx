@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../services/supabase'
 import { toast } from 'react-toastify'
@@ -9,6 +9,7 @@ interface Usuario {
   email: string
   ativo: boolean
   ultimo_login?: string
+  role?: string
 }
 
 interface AuthContextType {
@@ -31,7 +32,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [userData, setUserData] = useState<Usuario | null>(null)
   const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false) // SEMPRE false para evitar loading infinito
 
   // Função para buscar dados do usuário na tabela usuarios
   const fetchUserData = async (userId: string): Promise<Usuario | null> => {
@@ -44,22 +45,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .single()
 
       if (error) {
-        console.error('Erro ao buscar dados do usuário:', error)
         return null
       }
 
       return data
     } catch (error) {
-      console.error('Erro ao buscar dados do usuário:', error)
       return null
-    }
-  }
-
-  // Função para atualizar dados do usuário
-  const updateUserData = async () => {
-    if (user) {
-      const data = await fetchUserData(user.id)
-      setUserData(data)
     }
   }
 
@@ -99,7 +90,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         toast.success(`Bem-vindo(a), ${userData.nome}!`)
       }
     } catch (error: any) {
-      console.error('Erro no login:', error)
       toast.error(error.message || 'Erro ao fazer login')
       throw error
     } finally {
@@ -124,10 +114,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       toast.info('Logout realizado com sucesso')
     } catch (error: any) {
-      console.error('Erro no logout:', error)
       toast.error(error.message || 'Erro ao fazer logout')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Função para atualizar dados do usuário
+  const updateUserData = async () => {
+    if (user) {
+      const data = await fetchUserData(user.id)
+      setUserData(data)
     }
   }
 

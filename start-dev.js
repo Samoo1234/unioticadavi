@@ -1,8 +1,13 @@
 #!/usr/bin/env node
 
-const { spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ES Modules não tem __dirname, precisamos criar equivalente
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 console.log('🚀 Iniciando servidor de desenvolvimento otimizado...');
 

@@ -46,9 +46,13 @@ export function Login() {
 
   // Redirect se já estiver logado
   useEffect(() => {
+    console.log('Login state:', { user, authLoading });
+    // Só redireciona se tivermos certeza de que o usuário está logado
+    // e que o estado de loading já está resolvido
     if (user && !authLoading) {
-      const from = (location.state as any)?.from?.pathname || '/dashboard'
-      navigate(from, { replace: true })
+      console.log('Redirecionando usuário autenticado...');
+      const from = (location.state as any)?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
     }
   }, [user, authLoading, navigate, location])
 

@@ -42,15 +42,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 
 function AppContent() {
-  const { user, loading } = useAuth()
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <div>Carregando...</div>
-      </Box>
-    )
-  }
+  const { user } = useAuth()
 
   return (
     <Routes>

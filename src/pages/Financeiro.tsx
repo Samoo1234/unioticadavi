@@ -45,7 +45,7 @@ interface Filial {
 interface DataDisponivel {
   id: string;
   data: string;
-  cidade: string;
+  filial_id: number;
   dia_semana?: string;
 }
 
@@ -61,22 +61,21 @@ interface Agendamento {
 }
 
 interface FormaPagamento {
-  formaPagamento: string;
+  forma_pagamento: string;
   valor: string;
 }
 
 interface RegistroFinanceiro {
   id: string;
-  agendamentoId?: string;
+  agendamento_id: number;
   cliente: string;
   valor: string;
   tipo: string;
-  formaPagamento?: string;
+  forma_pagamento: string;
   formasPagamento?: FormaPagamento[];
   situacao: string;
-  observacoes: string;
-  cidadeId: string;
-  dataId: string;
+  observacoes: string | null;
+  data_pagamento: string | null;
   novo?: boolean;
   editando?: boolean;
 }
@@ -168,10 +167,11 @@ const Financeiro: React.FC = () => {
         if (datasError) {
           console.error('Erro ao carregar datas:', datasError);
         } else {
+          console.log('Dados brutos das datas_disponiveis:', datasData);
           setDatas(datasData?.map(data => ({
             id: data.id.toString(),
             data: data.data,
-            cidade: data.cidade || '',
+            filial_id: data.filial_id,
             dia_semana: data.dia_semana
           })) || []);
         }
@@ -194,14 +194,10 @@ const Financeiro: React.FC = () => {
       return;
     }
     
-    const filialSelecionadaObj = filiais.find(filial => filial.id === cidadeSelecionada);
-    if (!filialSelecionadaObj) {
-      setDatasFiltradasPorCidade([]);
-      return;
-    }
-    
-    const nomeFilialSelecionada = filialSelecionadaObj.nome;
-    const datasFiltradas = datas.filter(data => data.cidade === nomeFilialSelecionada);
+    console.log('Filial selecionada ID:', cidadeSelecionada);
+    console.log('Todas as datas disponíveis:', datas);
+    const datasFiltradas = datas.filter(data => data.filial_id && data.filial_id.toString() === cidadeSelecionada);
+    console.log('Datas filtradas por filial_id:', datasFiltradas);
     setDatasFiltradasPorCidade(datasFiltradas);
   }, [cidadeSelecionada, datas, filiais]);
 
@@ -223,12 +219,30 @@ const Financeiro: React.FC = () => {
         return;
       }
       
-      // Buscar registros financeiros
-      const { data: registrosData, error: registrosError } = await supabase
-        .from('registros_financeiros')
-        .select('*')
-        .eq('cidadeId', cidadeSelecionada)
-        .eq('dataId', dataSelecionada);
+      // Buscar agendamentos da filial e data selecionadas
+      const dataFormatada = dataObj.data;
+      const { data: agendamentosFilial, error: agendamentosError } = await supabase
+        .from('agendamentos')
+        .select('id')
+        .eq('filial_id', parseInt(cidadeSelecionada))
+        .gte('data_hora', dataFormatada)
+        .lt('data_hora', dataFormatada + ' 23:59:59');
+
+      if (agendamentosError) {
+        console.error('Erro ao buscar agendamentos:', agendamentosError);
+        setIsLoading(false);
+        return;
+      }
+
+      const agendamentoIds = agendamentosFilial?.map(a => a.id) || [];
+      
+      // Buscar registros financeiros dos agendamentos encontrados
+      const { data: registrosData, error: registrosError } = agendamentoIds.length > 0 
+        ? await supabase
+            .from('registros_financeiros')
+            .select('*')
+            .in('agendamento_id', agendamentoIds)
+        : { data: [], error: null };
 
       if (registrosError) {
         console.error('Erro ao buscar registros financeiros:', registrosError);
@@ -248,7 +262,7 @@ const Financeiro: React.FC = () => {
           pagamentosTemp[registro.id] = registro.formasPagamento;
         } else {
           pagamentosTemp[registro.id] = [{
-            formaPagamento: registro.formaPagamento || '',
+            forma_pagamento: registro.forma_pagamento || '',
             valor: registro.valor || ''
           }];
         }
@@ -259,30 +273,23 @@ const Financeiro: React.FC = () => {
         ...pagamentosTemp
       }));
       
-      // Buscar agendamentos
-      const filialObj = filiais.find(filial => filial.id === cidadeSelecionada);
-      if (!filialObj) {
-        console.error('Filial selecionada não encontrada');
-        setIsLoading(false);
-        return;
-      }
-      
-      const dataFormatada = dataObj.data;
-      const { data: agendamentosData, error: agendamentosError } = await supabase
-        .from('agendamentos')
-        .select('*')
-        .eq('cidade', filialObj.nome)
-        .eq('data', dataFormatada);
+      // Buscar agendamentos completos para processamento
+      const { data: agendamentosData, error: agendamentosCompletosError } = agendamentoIds.length > 0
+        ? await supabase
+            .from('agendamentos')
+            .select('*')
+            .in('id', agendamentoIds)
+        : { data: [], error: null };
 
-      if (agendamentosError) {
-        console.error('Erro ao buscar agendamentos:', agendamentosError);
+      if (agendamentosCompletosError) {
+        console.error('Erro ao buscar agendamentos completos:', agendamentosCompletosError);
       }
 
       const agendamentosProcessados: Agendamento[] = agendamentosData || [];
       const registrosDeAgendamentos = [...registros];
 
       agendamentosProcessados.forEach((agendamento) => {
-        const registroExistente = registros.find(r => r.agendamentoId === agendamento.id);
+        const registroExistente = registros.find(r => r.agendamento_id.toString() === agendamento.id);
 
         if (!registroExistente) {
           const novoRegistroId = `novo_${agendamento.id}`;
@@ -298,21 +305,20 @@ const Financeiro: React.FC = () => {
 
           const novoRegistro: RegistroFinanceiro = {
             id: novoRegistroId,
-            agendamentoId: agendamento.id,
+            agendamento_id: parseInt(agendamento.id),
             cliente: nomeCliente,
             valor: agendamento.valor || '',
             tipo: '',
-            formaPagamento: '',
+            forma_pagamento: '',
             situacao: '',
             observacoes: '',
+            data_pagamento: null,
             novo: true,
-            editando: true,
-            cidadeId: cidadeSelecionada,
-            dataId: dataSelecionada
+            editando: true
           };
 
           registrosDeAgendamentos.push(novoRegistro);
-          pagamentosTemp[novoRegistroId] = [{ formaPagamento: '', valor: agendamento.valor || '' }];
+          pagamentosTemp[novoRegistroId] = [{ forma_pagamento: '', valor: agendamento.valor || '' }];
         }
       });
 
@@ -397,12 +403,12 @@ const Financeiro: React.FC = () => {
       // Contabilizar por forma de pagamento
       if (registro.formasPagamento && Array.isArray(registro.formasPagamento)) {
         for (const pagamento of registro.formasPagamento) {
-          if (!pagamento.formaPagamento || !pagamento.valor) continue;
+          if (!pagamento.forma_pagamento || !pagamento.valor) continue;
           
           const valorPagamento = parseFloat(pagamento.valor.replace(',', '.'));
           if (isNaN(valorPagamento)) continue;
           
-          switch (pagamento.formaPagamento.toLowerCase()) {
+          switch (pagamento.forma_pagamento.toLowerCase()) {
             case 'dinheiro':
               stats.countDinheiro++;
               stats.totalDinheiro += valorPagamento;
@@ -421,7 +427,7 @@ const Financeiro: React.FC = () => {
           }
         }
       } else {
-        switch (registro.formaPagamento?.toLowerCase()) {
+        switch (registro.forma_pagamento?.toLowerCase()) {
           case 'dinheiro':
             stats.countDinheiro++;
             stats.totalDinheiro += valor;
@@ -536,16 +542,13 @@ const Financeiro: React.FC = () => {
         const { error } = await supabase
           .from('registros_financeiros')
           .insert({
-            agendamentoId: registro.agendamentoId,
+            agendamento_id: registro.agendamento_id,
             cliente: registro.cliente,
             valor: registro.valor,
             tipo: registro.tipo,
-            formaPagamento: registro.formaPagamento,
-            formasPagamento: pagamentosDivididos[registro.id],
+            forma_pagamento: registro.forma_pagamento,
             situacao: registro.situacao,
-            observacoes: registro.observacoes,
-            cidadeId: registro.cidadeId,
-            dataId: registro.dataId
+            observacoes: registro.observacoes
           });
 
         if (error) {
@@ -561,8 +564,7 @@ const Financeiro: React.FC = () => {
             cliente: registro.cliente,
             valor: registro.valor,
             tipo: registro.tipo,
-            formaPagamento: registro.formaPagamento,
-            formasPagamento: pagamentosDivididos[registro.id],
+            forma_pagamento: registro.forma_pagamento,
             situacao: registro.situacao,
             observacoes: registro.observacoes
           })
@@ -876,8 +878,8 @@ const Financeiro: React.FC = () => {
                         <TableCell>
                           {registro.editando ? (
                             <Select
-                              value={registro.formaPagamento || ''}
-                              onChange={(e) => handleChangeRegistro(registro.id, 'formaPagamento', e.target.value)}
+                              value={registro.forma_pagamento || ''}
+                              onChange={(e) => handleChangeRegistro(registro.id, 'forma_pagamento', e.target.value)}
                               size="small"
                               fullWidth
                             >
@@ -886,7 +888,7 @@ const Financeiro: React.FC = () => {
                               <MenuItem value="pix">PIX</MenuItem>
                             </Select>
                           ) : (
-                            registro.formaPagamento
+                            registro.forma_pagamento
                           )}
                         </TableCell>
                         <TableCell>

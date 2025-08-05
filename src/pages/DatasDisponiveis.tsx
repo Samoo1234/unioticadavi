@@ -24,6 +24,7 @@ import {
 } from '@mui/material'
 import { Settings as SettingsIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material'
 import { supabase } from '@/services/supabase'
+import { formatarData, getDataAtualISO } from '@/utils/dateUtils'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'react-toastify'
 import { DataDisponivel, Filial, Medico, ConfiguracaoHorario } from '@/types'
@@ -446,7 +447,7 @@ export default function DatasDisponiveis() {
             intervalo_minutos: config.intervalo_minutos,
             horarios_almoco: config.horarios_almoco,
             dias_funcionamento: config.dias_funcionamento,
-            updated_at: new Date().toISOString()
+            updated_at: getDataAtualISO()
           })
           .eq('filial_id', filialId)
 
@@ -462,8 +463,8 @@ export default function DatasDisponiveis() {
             intervalo_minutos: config.intervalo_minutos,
             horarios_almoco: config.horarios_almoco,
             dias_funcionamento: config.dias_funcionamento,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            created_at: getDataAtualISO(),
+            updated_at: getDataAtualISO()
           })
 
         if (error) throw error
@@ -494,7 +495,7 @@ export default function DatasDisponiveis() {
             .from('datas_disponiveis')
             .update({
               horarios_disponiveis: novosHorarios,
-              updated_at: new Date().toISOString()
+              updated_at: getDataAtualISO()
             })
             .eq('filial_id', filialId)
             .eq('ativa', true)
@@ -534,8 +535,7 @@ export default function DatasDisponiveis() {
     setLoading(true)
     try {
       // Formatar a data para exibição
-      const dataObj = new Date(formData.data)
-      const dataFormatada = dataObj.toISOString().split('T')[0]
+      const dataFormatada = formData.data
 
       // Verificar se já existe uma data para esta filial na mesma data
       let query = supabase
@@ -583,7 +583,7 @@ export default function DatasDisponiveis() {
         data: dataFormatada,
         horarios_disponiveis: horariosGerados,
         ativa: true,
-        updated_at: new Date().toISOString()
+        updated_at: getDataAtualISO()
       }
 
       console.log('Dados para salvar:', dateData)
@@ -604,7 +604,7 @@ export default function DatasDisponiveis() {
           .from('datas_disponiveis')
           .insert({
             ...dateData,
-            created_at: new Date().toISOString()
+            created_at: getDataAtualISO()
           })
 
         if (error) throw error
@@ -787,7 +787,7 @@ export default function DatasDisponiveis() {
               return (
                 <TableRow key={date.id}>
                   <TableCell>{filial?.nome || 'Filial não encontrada'}</TableCell>
-                  <TableCell>{new Date(date.data).toLocaleDateString('pt-BR')}</TableCell>
+                  <TableCell>{formatarData(date.data)}</TableCell>
                   <TableCell>{date.medico_nome}</TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>

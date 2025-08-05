@@ -1,6 +1,6 @@
 import React from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { Box, CircularProgress, Alert } from '@mui/material'
+import { Box, Alert } from '@mui/material'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface ProtectedRouteProps {
@@ -14,24 +14,8 @@ export function ProtectedRoute({
   requiredRoles = [], 
   // fallbackPath = '/dashboard' // removido pois não é utilizado 
 }: ProtectedRouteProps) {
-  const { user, userData, loading } = useAuth()
+  const { user, userData } = useAuth()
   const location = useLocation()
-
-  // Mostrar loading enquanto verifica autenticação
-  if (loading) {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh'
-        }}
-      >
-        <CircularProgress size={60} />
-      </Box>
-    )
-  }
 
   // Redirecionar para login se não estiver autenticado
   if (!user || !userData) {
@@ -56,18 +40,22 @@ export function ProtectedRoute({
   }
 
   // Verificar permissões de role se especificadas
-  if (requiredRoles.length > 0 && !requiredRoles.includes(userData.role)) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="warning">
-          Você não tem permissão para acessar esta página.
-          <br />
-          Seu perfil atual: <strong>{userData.role}</strong>
-          <br />
-          Perfis necessários: <strong>{requiredRoles.join(', ')}</strong>
-        </Alert>
-      </Box>
-    )
+  if (requiredRoles.length > 0) {
+    const userRole = userData.role || 'sem perfil'; // Valor padrão caso role não exista
+    
+    if (!requiredRoles.includes(userRole)) {
+      return (
+        <Box sx={{ p: 3 }}>
+          <Alert severity="warning">
+            Você não tem permissão para acessar esta página.
+            <br />
+            Seu perfil atual: <strong>{userRole}</strong>
+            <br />
+            Perfis necessários: <strong>{requiredRoles.join(', ')}</strong>
+          </Alert>
+        </Box>
+      )
+    }
   }
 
   // Renderizar o componente se todas as verificações passaram
