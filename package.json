@@ -16,7 +16,10 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist node_modules/.vite",
     "restart": "npm run clean && npm run dev",
-    "kill-port": "npx kill-port 3002"
+    "kill-port": "npx kill-port 3002",
+    "start": "node iniciar-limpo.cjs",
+    "start:clean": "node limpar-e-iniciar.cjs",
+    "kill-all": "node -e \"require('child_process').execSync('for /f \\\"tokens=5\\\" %a in (\\\"netstat -ano ^| findstr :3000 :3001 :3002 :3003 :3004 :3005 :5173 :4173\\\") do taskkill /f /pid %a 2>nul', {stdio: 'inherit'})\""
   },
   "dependencies": {
     "@emotion/react": "^11.11.1",
