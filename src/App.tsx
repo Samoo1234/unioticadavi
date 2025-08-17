@@ -1,6 +1,4 @@
-// import React from 'react' // removido pois não é utilizado
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { Box } from '@mui/material'
 
 // Components
 import { ProtectedRoute } from '@/components/ProtectedRoute'
@@ -93,6 +91,7 @@ function AppContent() {
       <Route path="/cmv/relatorio-os" element={<ProtectedRoute><Layout><RelatorioOS /></Layout></ProtectedRoute>} />
       <Route path="/cmv/tipos-fornecedores" element={<ProtectedRoute><Layout><TiposFornecedores /></Layout></ProtectedRoute>} />
       <Route path="/cmv/titulos" element={<ProtectedRoute><Layout><Titulos /></Layout></ProtectedRoute>} />
+      <Route path="/cmv/extrato-titulos" element={<ProtectedRoute><Layout><EmissaoTitulos /></Layout></ProtectedRoute>} />
       <Route path="/cmv/filiais" element={<ProtectedRoute><Layout><Filiais /></Layout></ProtectedRoute>} />
       
       {/* Rota 404 */}

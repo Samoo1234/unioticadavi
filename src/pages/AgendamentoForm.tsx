@@ -11,26 +11,22 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Alert,
   CircularProgress,
   useTheme,
   alpha,
-  IconButton,
   AppBar,
   Toolbar
 } from '@mui/material';
 import {
   Person as PersonIcon,
   Phone as PhoneIcon,
-  CalendarToday as CalendarIcon,
-  AccessTime as TimeIcon,
-  LocationOn as LocationIcon,
+
   RemoveRedEye
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
-import { formatarData, formatarDataComDiaSemana, getDataAtualISO } from '../utils/dateUtils';
+import { formatarDataComDiaSemana } from '../utils/dateUtils';
 
 interface Filial {
   id: string;
@@ -108,23 +104,27 @@ export default function AgendamentoForm() {
             if (error) throw error;
             
             if (appointmentData) {
+              // Encontrar a filial pelo nome da cidade
+              const filialEncontrada = filiais.find(f => f.nome === appointmentData.cidade);
+              const filialId = filialEncontrada?.id || '';
+              
+              // Encontrar a data disponível pela data e filial
+              await loadDatasDisponiveis(filialId);
+              const dataEncontrada = datasDisponiveis.find(d => d.data === appointmentData.data && d.filial_id === filialId);
+              const dataId = dataEncontrada?.id || '';
+              
               setFormData({
                 nome: appointmentData.nome || '',
                 telefone: appointmentData.telefone || '',
-                filial_id: appointmentData.filial_id || '',
-                data_id: appointmentData.data_id || '',
+                filial_id: filialId,
+                data_id: dataId,
                 horario: appointmentData.horario || '',
                 observacoes: appointmentData.observacoes || ''
               });
               
-              // Se tiver filial_id, carregar datas disponíveis
-              if (appointmentData.filial_id) {
-                await loadDatasDisponiveis(appointmentData.filial_id);
-              }
-              
               // Se tiver data_id, carregar horários disponíveis
-              if (appointmentData.data_id) {
-                await loadHorariosDisponiveis(appointmentData.data_id);
+              if (dataId) {
+                await loadHorariosDisponiveis(dataId);
               }
             }
           } catch (error: any) {
@@ -176,20 +176,20 @@ export default function AgendamentoForm() {
       setDatasDisponiveis(data || []);
       
       // Buscar o médico associado à filial selecionada
-      if (data && data.length > 0) {
-        const filialDates = data.filter(d => d.filial_id === filialId);
-        if (filialDates.length > 0 && filialDates[0].medico_id) {
-          const { data: medicoData, error: medicoError } = await supabase
-            .from('medicos')
-            .select('nome')
-            .eq('id', filialDates[0].medico_id)
-            .single();
-            
-          if (!medicoError && medicoData) {
-            setSelectedCityDoctor(medicoData.nome);
+        if (data && data.length > 0) {
+          const filialDates = data.filter(d => d.filial_id === filialId);
+          if (filialDates.length > 0 && filialDates[0].medico_id) {
+            const { data: medicoData, error: medicoError } = await supabase
+              .from('medicos')
+              .select('nome')
+              .eq('id', filialDates[0].medico_id)
+              .single();
+              
+            if (!medicoError && medicoData) {
+              setSelectedCityDoctor(medicoData.nome);
+            }
           }
         }
-      }
       
       return data;
     } catch (error: any) {
@@ -266,7 +266,8 @@ export default function AgendamentoForm() {
             const { data: agendamentos, error: agendamentosError } = await supabase
               .from('agendamentos')
               .select('horario')
-              .eq('data_id', dataId);
+              .eq('data', dataSelecionada.data)
+              .eq('cidade', filiais.find(f => f.id === dataSelecionada.filial_id)?.nome || '');
               
             if (!agendamentosError && agendamentos && agendamentos.length > 0) {
               const horariosAgendados = agendamentos.map(a => a.horario);
@@ -409,7 +410,8 @@ export default function AgendamentoForm() {
         const { data: agendamentos, error: checkError } = await supabase
           .from('agendamentos')
           .select('horario')
-          .eq('data_id', formData.data_id)
+          .eq('data', dataSelecionada.data)
+          .eq('cidade', filialSelecionada.nome)
           .eq('horario', formData.horario);
           
         if (checkError) throw checkError;
@@ -420,15 +422,12 @@ export default function AgendamentoForm() {
 
         const appointmentData = {
           cidade: filialSelecionada.nome,
-          filial_id: formData.filial_id,
           data: dataSelecionada.data,
-          data_id: formData.data_id,
           horario: formData.horario,
           nome: formData.nome,
           telefone: formData.telefone,
           observacoes: formData.observacoes || '',
-          status: 'pendente',
-          criado_em: new Date().toISOString()
+          status: 'pendente'
         };
 
         const { error } = await supabase
@@ -553,6 +552,11 @@ export default function AgendamentoForm() {
                 {errors.filial_id && (
                   <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
                     {errors.filial_id}
+                  </Typography>
+                )}
+                {selectedCityDoctor && (
+                  <Typography variant="body2" color="primary" sx={{ mt: 1, mb: 1, fontWeight: 'medium' }}>
+                    Médico: {selectedCityDoctor}
                   </Typography>
                 )}
               </FormControl>
@@ -681,4 +685,4 @@ export default function AgendamentoForm() {
       </Container>
     </Box>
   );
-} 
+}

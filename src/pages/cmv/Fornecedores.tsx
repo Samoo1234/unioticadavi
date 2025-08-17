@@ -35,7 +35,7 @@ interface Fornecedor {
   id: number
   nome: string
   cnpj: string
-  tipo_fornecedor_id: number
+  tipo_id: number
   endereco?: string
   telefone?: string
   email?: string
@@ -67,10 +67,8 @@ const Fornecedores: React.FC = () => {
   const [form, setForm] = useState({
     nome: '',
     cnpj: '',
-    tipo_fornecedor_id: '',
+    tipo_id: '',
     endereco: '',
-    telefone: '',
-    email: '',
     ativo: true
   })
 
@@ -107,7 +105,6 @@ const Fornecedores: React.FC = () => {
       const { data, error } = await supabase
         .from('tipos_fornecedores')
         .select('*')
-        .eq('ativo', true)
         .order('nome')
 
       if (error) throw error
@@ -124,10 +121,8 @@ const Fornecedores: React.FC = () => {
       setForm({
         nome: fornecedor.nome,
         cnpj: fornecedor.cnpj,
-        tipo_fornecedor_id: fornecedor.tipo_fornecedor_id.toString(),
+        tipo_id: fornecedor.tipo_id.toString(),
         endereco: fornecedor.endereco || '',
-        telefone: fornecedor.telefone || '',
-        email: fornecedor.email || '',
         ativo: fornecedor.ativo
       })
     } else {
@@ -135,10 +130,8 @@ const Fornecedores: React.FC = () => {
       setForm({
         nome: '',
         cnpj: '',
-        tipo_fornecedor_id: '',
+        tipo_id: '',
         endereco: '',
-        telefone: '',
-        email: '',
         ativo: true
       })
     }
@@ -151,10 +144,8 @@ const Fornecedores: React.FC = () => {
     setForm({
       nome: '',
       cnpj: '',
-      tipo_fornecedor_id: '',
+      tipo_id: '',
       endereco: '',
-      telefone: '',
-      email: '',
       ativo: true
     })
   }
@@ -168,7 +159,7 @@ const Fornecedores: React.FC = () => {
   }
 
   const handleSave = async () => {
-    if (!form.nome.trim() || !form.cnpj.trim() || !form.tipo_fornecedor_id) {
+    if (!form.nome.trim() || !form.cnpj.trim() || !form.tipo_id) {
       toast.error('Por favor, preencha todos os campos obrigatórios')
       return
     }
@@ -178,10 +169,8 @@ const Fornecedores: React.FC = () => {
       const fornecedorData = {
         nome: form.nome.trim(),
         cnpj: form.cnpj.trim(),
-        tipo_fornecedor_id: parseInt(form.tipo_fornecedor_id),
+        tipo_id: parseInt(form.tipo_id),
         endereco: form.endereco.trim() || null,
-        telefone: form.telefone.trim() || null,
-        email: form.email.trim() || null,
         ativo: form.ativo
       }
 
@@ -327,8 +316,6 @@ const Fornecedores: React.FC = () => {
               <TableCell>Nome</TableCell>
               <TableCell>CNPJ</TableCell>
               <TableCell>Tipo</TableCell>
-              <TableCell>Telefone</TableCell>
-              <TableCell>Email</TableCell>
               <TableCell>Status</TableCell>
               <TableCell align="center">Ações</TableCell>
             </TableRow>
@@ -339,8 +326,6 @@ const Fornecedores: React.FC = () => {
                 <TableCell>{fornecedor.nome}</TableCell>
                 <TableCell>{fornecedor.cnpj}</TableCell>
                 <TableCell>{fornecedor.tipos_fornecedores?.nome || '-'}</TableCell>
-                <TableCell>{fornecedor.telefone || '-'}</TableCell>
-                <TableCell>{fornecedor.email || '-'}</TableCell>
                 <TableCell>
                   <Box
                     component="span"
@@ -416,8 +401,8 @@ const Fornecedores: React.FC = () => {
             <TextField
               select
               label="Tipo de Fornecedor"
-              name="tipo_fornecedor_id"
-              value={form.tipo_fornecedor_id}
+              name="tipo_id"
+              value={form.tipo_id}
               onChange={handleInputChange}
               fullWidth
               required
@@ -436,21 +421,6 @@ const Fornecedores: React.FC = () => {
               fullWidth
               multiline
               rows={2}
-            />
-            <TextField
-              label="Telefone"
-              name="telefone"
-              value={form.telefone}
-              onChange={handleInputChange}
-              fullWidth
-            />
-            <TextField
-              label="Email"
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={handleInputChange}
-              fullWidth
             />
             <TextField
               select

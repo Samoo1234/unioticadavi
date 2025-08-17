@@ -163,9 +163,10 @@ export default function TiposFornecedores() {
       }
 
       handleCloseDialog()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const dbError = error as { code?: string; message?: string }
       console.error('Erro ao salvar tipo:', error)
-      if (error.code === '23505') {
+      if (dbError.code === '23505') {
         toast.error('Já existe um tipo de fornecedor com este nome')
       } else {
         toast.error('Erro ao salvar tipo de fornecedor')

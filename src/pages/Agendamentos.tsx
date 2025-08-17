@@ -41,6 +41,7 @@ import {
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { supabase } from '../services/supabase';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 
 
 interface Filial {
@@ -347,6 +348,8 @@ export function Agendamentos() {
   const confirmedAppointments = filteredAppointments.filter(a => a.status === 'confirmado').length;
   const canceledAppointments = filteredAppointments.filter(a => a.status === 'cancelado').length;
 
+
+
   const generatePDF = () => {
     toast.info('Funcionalidade de geração de PDF será implementada em breve.');
   };
@@ -360,7 +363,14 @@ export function Agendamentos() {
   }
 
   return (
-    <Box>
+    <Box sx={{ 
+      width: '100%',
+      minHeight: '100vh',
+      overflowY: 'scroll',
+      overflowX: 'hidden',
+      padding: 2,
+      boxSizing: 'border-box'
+    }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
@@ -535,7 +545,7 @@ export function Agendamentos() {
       {/* Tabela de agendamentos */}
       <Card>
         <CardContent>
-          <TableContainer component={Paper} sx={{ maxHeight: 400, overflow: 'auto' }}>
+          <TableContainer component={Paper}>
             <Table stickyHeader>
               <TableHead>
                 <TableRow>
@@ -689,15 +699,25 @@ export function Agendamentos() {
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
+              <DatePicker
                 label="Data *"
-                type="date"
-                value={formData.data}
-                onChange={(e) => handleInputChange('data', e.target.value)}
-                error={!!formErrors.data}
-                helperText={formErrors.data}
-                InputLabelProps={{ shrink: true }}
+                value={formData.data ? new Date(formData.data + 'T00:00:00') : null}
+                onChange={(novaData) => {
+                  if (novaData) {
+                    const dataISO = novaData.toISOString().split('T')[0]
+                    handleInputChange('data', dataISO)
+                  } else {
+                    handleInputChange('data', '')
+                  }
+                }}
+                format="dd/MM/yyyy"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    error: !!formErrors.data,
+                    helperText: formErrors.data
+                  }
+                }}
               />
             </Grid>
             <Grid item xs={12} sm={4}>

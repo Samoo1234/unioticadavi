@@ -102,88 +102,209 @@ const EmissaoTitulos: React.FC = () => {
   // Função para carregar dados
   const carregarDados = async () => {
     setIsLoading(true)
+    setTitulosFiltrados([]) // Limpa os títulos filtrados ao recarregar
     try {
       console.log('=== DEBUG EMISSAO TITULOS ===')
       console.log('Iniciando carregamento de dados...')
       
-      // Carregar tipos de fornecedores
-      const { data: dadosTipos, error: errorTipos } = await supabase
-        .from('tipos_fornecedores')
-        .select('*')
-        .order('nome')
+      // Arrays para armazenar dados localmente
+      let dadosTipos = []
+      let dadosFornecedores = []
+      let dadosFiliais = []
+      let dadosTitulos = []
       
-      if (errorTipos) throw errorTipos
+      // Carregar tipos de fornecedores
+      try {
+        const { data, error } = await supabase
+          .from('tipos_fornecedores')
+          .select('*')
+          .order('nome')
+        
+        if (error) {
+          console.error('Erro ao carregar tipos de fornecedores:', error)
+          setAlert({
+            open: true,
+            message: 'Erro ao carregar tipos de fornecedores: ' + error.message,
+            severity: 'warning'
+          })
+        } else {
+          dadosTipos = data || []
+          console.log('Tipos de fornecedores carregados:', dadosTipos.length)
+        }
+      } catch (error) {
+        console.error('Exceção ao carregar tipos de fornecedores:', error)
+        // Continua a execução mesmo com erro
+      }
       
       // Carregar fornecedores
-      const { data: dadosFornecedores, error: errorFornecedores } = await supabase
-        .from('fornecedores')
-        .select('*')
-        .order('nome')
-      
-      if (errorFornecedores) throw errorFornecedores
+      try {
+        const { data, error } = await supabase
+          .from('fornecedores')
+          .select('*')
+          .order('nome')
+        
+        if (error) {
+          console.error('Erro ao carregar fornecedores:', error)
+          setAlert({
+            open: true,
+            message: 'Erro ao carregar fornecedores: ' + error.message,
+            severity: 'warning'
+          })
+        } else {
+          dadosFornecedores = data || []
+          console.log('Fornecedores carregados:', dadosFornecedores.length)
+        }
+      } catch (error) {
+        console.error('Exceção ao carregar fornecedores:', error)
+        // Continua a execução mesmo com erro
+      }
       
       // Carregar filiais
-      const { data: dadosFiliais, error: errorFiliais } = await supabase
-        .from('filiais')
-        .select('*')
-        .order('nome')
+      try {
+        const { data, error } = await supabase
+          .from('filiais')
+          .select('*')
+          .order('nome')
+        
+        if (error) {
+          console.error('Erro ao carregar filiais:', error)
+          setAlert({
+            open: true,
+            message: 'Erro ao carregar filiais: ' + error.message,
+            severity: 'warning'
+          })
+        } else {
+          dadosFiliais = data || []
+          console.log('Filiais carregadas:', dadosFiliais.length)
+        }
+      } catch (error) {
+        console.error('Exceção ao carregar filiais:', error)
+        // Continua a execução mesmo com erro
+      }
       
-      if (errorFiliais) throw errorFiliais
+      // Carregar títulos - removendo a junção com tipos_fornecedores que está causando erro
+      try {
+        // Primeiro, vamos carregar os títulos com as relações que funcionam
+        const { data, error } = await supabase
+          .from('titulos')
+          .select(`
+            *,
+            fornecedores(nome),
+            filiais(nome)
+          `)
+          .order('data_vencimento', { ascending: false })
+        
+        if (error) {
+          console.error('Erro ao carregar títulos:', error)
+          setAlert({
+            open: true,
+            message: 'Erro ao carregar títulos: ' + error.message,
+            severity: 'error'
+          })
+          dadosTitulos = []  // Definir array vazio em caso de erro
+        } else {
+          dadosTitulos = data || []
+          console.log('Títulos carregados:', dadosTitulos.length)
+          
+          // Agora adicionamos os tipos separadamente, sem depender do relacionamento
+          if (dadosTipos.length > 0) {
+            // Criar um mapa de id -> nome para tipos de fornecedores
+            const tiposMap = dadosTipos.reduce((acc, tipo) => {
+              acc[tipo.id] = tipo.nome
+              return acc
+            }, {})
+            
+            // Atribuir os nomes dos tipos para cada título usando o tipo_id
+            dadosTitulos = dadosTitulos.map(titulo => {
+              if (titulo.tipo_id && tiposMap[titulo.tipo_id]) {
+                return {
+                  ...titulo,
+                  tipo_nome: tiposMap[titulo.tipo_id]
+                }
+              }
+              return titulo
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Exceção ao carregar títulos:', error)
+        // Mostra um alerta mais crítico, pois títulos são essenciais
+        setAlert({
+          open: true,
+          message: 'Erro crítico ao carregar títulos. Por favor, recarregue a página.',
+          severity: 'error'
+        })
+        dadosTitulos = []  // Definir array vazio em caso de erro
+      }
       
-      // Carregar títulos
-      const { data: dadosTitulos, error: errorTitulos } = await supabase
-        .from('titulos')
-        .select(`
-          *,
-          fornecedores(nome),
-          filiais(nome),
-          tipos_fornecedores(nome)
-        `)
-        .order('data_vencimento', { ascending: false })
-      
-      if (errorTitulos) throw errorTitulos
-      
-      console.log('Dados carregados:', {
-        tipos: dadosTipos?.length || 0,
-        fornecedores: dadosFornecedores?.length || 0,
-        filiais: dadosFiliais?.length || 0,
-        titulos: dadosTitulos?.length || 0
+      console.log('Resumo dos dados carregados:', {
+        tipos: dadosTipos.length,
+        fornecedores: dadosFornecedores.length,
+        filiais: dadosFiliais.length,
+        titulos: dadosTitulos.length
       })
       
       // Mapear tipos para o formato {id, nome}
       const tiposFormatados = (dadosTipos || []).map(t => ({
         id: t.id,
-        nome: t.nome
-      }))
+        nome: t.nome || 'Tipo sem nome'
+      })).sort((a, b) => a.nome.localeCompare(b.nome))
       setTipos(tiposFormatados)
       
       // Mapear fornecedores para o formato {id, nome}
       const fornecedoresFormatados = (dadosFornecedores || []).map(f => ({
         id: f.id,
-        nome: f.nome
-      }))
+        nome: f.nome || 'Fornecedor sem nome'
+      })).sort((a, b) => a.nome.localeCompare(b.nome))
       setFornecedores(fornecedoresFormatados)
       
       // Mapear filiais para o formato {id, nome}
       const filiaisFormatadas = (dadosFiliais || []).map(f => ({
         id: f.id,
-        nome: f.nome
-      }))
+        nome: f.nome || 'Filial sem nome'
+      })).sort((a, b) => a.nome.localeCompare(b.nome))
       setFiliais(filiaisFormatadas)
+      
+      // Verificar se os dados foram carregados com sucesso
+      if (tiposFormatados.length === 0) {
+        console.warn('Nenhum tipo de fornecedor carregado')
+      }
+      
+      if (fornecedoresFormatados.length === 0) {
+        console.warn('Nenhum fornecedor carregado')
+      }
+      
+      if (filiaisFormatadas.length === 0) {
+        console.warn('Nenhuma filial carregada')
+      }
       
       // Processar os títulos
       const titulosFormatados = (dadosTitulos || []).map(titulo => {
         const fornecedor = fornecedoresFormatados.find(f => f.id === titulo.fornecedor_id)
         const filial = filiaisFormatadas.find(f => f.id === titulo.filial_id)
-        const tipo = tiposFormatados.find(t => t.id === titulo.tipo_id)
+        
+        // Procurar tipo pelo id ou, se ausente, pelo nome
+        let tipo = tiposFormatados.find(t => t.id === titulo.tipo_id)
+        
+        // Se não encontrou pelo id mas tem o campo tipo, tenta encontrar pelo nome
+        if (!tipo && titulo.tipo) {
+          tipo = tiposFormatados.find(t => t.nome && t.nome.toLowerCase() === titulo.tipo.toLowerCase())
+          // Se encontrou um tipo pelo nome, usa seu ID
+          if (tipo) {
+            console.log(`Encontrado tipo_id ${tipo.id} pelo nome ${titulo.tipo} para título ${titulo.id}`)
+          }
+        }
         
         return {
           id: titulo.id,
           numero: titulo.numero_documento || titulo.numero,
-          tipo: tipo?.nome || titulo.tipo || 'Não especificado',
-          fornecedor: fornecedor?.nome || 'Não especificado',
+          // Usar tipo_nome (do mapeamento manual) ou tentar outros campos
+          tipo: titulo.tipo_nome || tipo?.nome || titulo.tipo || 'Não especificado',
+          // Definir tipo_id explicitamente do tipo encontrado, ou manter o original se existir
+          tipo_id: tipo?.id || titulo.tipo_id,
+          fornecedor: fornecedor?.nome || titulo.fornecedores?.nome || 'Não especificado',
           fornecedor_id: titulo.fornecedor_id,
-          filial: filial?.nome || 'Não especificada',
+          filial: filial?.nome || titulo.filiais?.nome || 'Não especificada',
           filial_id: titulo.filial_id,
           vencimento: titulo.data_vencimento,
           data_emissao: titulo.data_emissao,
@@ -215,52 +336,155 @@ const EmissaoTitulos: React.FC = () => {
     }
   }
   
-  // Carregar dados iniciais
-  useEffect(() => {
-    carregarDados()
-  }, [])
 
-  const handleFiltroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const novosFiltros = { ...filtros, [e.target.name]: e.target.value }
-    setFiltros(novosFiltros)
-    aplicarFiltros(novosFiltros, filtroTipo)
-  }
-  
-  const handleFiltroTipoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target
+  // Manipulador para mudança de filial
+  const handleFilialChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    let filialId = '';
     
-    // Se algum tipo for marcado, desmarca os outros
-    const novoFiltroTipo = {
-      vencimento: name === 'vencimento' ? checked : false,
-      pagamento: name === 'pagamento' ? checked : false,
-      todos: name === 'todos' ? checked : false
+    // Verificar se o valor não está vazio antes de tentar convertê-lo
+    if (e.target.value !== '') {
+      // Garantir que o valor seja um número válido
+      const parsedValue = parseInt(e.target.value, 10);
+      filialId = !isNaN(parsedValue) ? parsedValue : e.target.value;
     }
+    
+    setFiltros({ ...filtros, filial_id: filialId });
+    aplicarFiltros({ ...filtros, filial_id: filialId }, filtroTipo);
+  };
+
+  // Manipulador para filtros de texto/selects
+  const handleFiltroChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    const novosFiltros = { ...filtros, [name]: value };
+    setFiltros(novosFiltros);
+    aplicarFiltros(novosFiltros, filtroTipo);
+  };
+
+  // Manipulador para checkboxes de tipo
+  const handleFiltroTipoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = e.target;
+    
+    const novoFiltroTipo = {
+      vencimento: name === 'vencimento' ? checked : filtroTipo.vencimento,
+      pagamento: name === 'pagamento' ? checked : filtroTipo.pagamento,
+      todos: name === 'todos' ? checked : filtroTipo.todos
+    };
     
     // Se todos forem desmarcados, ativa o 'todos'
     if (!novoFiltroTipo.vencimento && !novoFiltroTipo.pagamento && !novoFiltroTipo.todos) {
-      novoFiltroTipo.todos = true
+      novoFiltroTipo.todos = true;
     }
     
-    setFiltroTipo(novoFiltroTipo)
-    aplicarFiltros(filtros, novoFiltroTipo)
-  }
+    setFiltroTipo(novoFiltroTipo);
+    aplicarFiltros(filtros, novoFiltroTipo);
+  };
   
   const aplicarFiltros = (filtrosAtuais = filtros, tiposFiltro = filtroTipo) => {
     let resultado = [...titulos]
     
-    // Filtrar por tipo
+    // Filtrar por tipo - buscando pelo tipo_id que corresponde ao nome selecionado
     if (filtrosAtuais.tipo) {
-      resultado = resultado.filter(titulo => titulo.tipo === filtrosAtuais.tipo)
+      // Encontrar o id do tipo pelo nome selecionado
+      const tipoSelecionado = tipos.find(t => t.nome === filtrosAtuais.tipo)
+      console.log('Filtrando por tipo:', filtrosAtuais.tipo, 'ID:', tipoSelecionado?.id)
+      console.log('Títulos antes da filtragem:', resultado.length)
+      
+      if (tipoSelecionado) {
+        resultado = resultado.filter(titulo => {
+          // Garantir que tipo_id seja tratado como número para comparação
+          let tituloTipoId = null;
+          if (titulo.tipo_id !== undefined && titulo.tipo_id !== null) {
+            tituloTipoId = typeof titulo.tipo_id === 'string' ? parseInt(titulo.tipo_id, 10) : titulo.tipo_id;
+          }
+          
+          // Garantir que o ID do tipoSelecionado também seja tratado como número
+          let tipoSelecionadoId = null;
+          if (tipoSelecionado.id !== undefined && tipoSelecionado.id !== null) {
+            tipoSelecionadoId = typeof tipoSelecionado.id === 'string' ? parseInt(tipoSelecionado.id, 10) : tipoSelecionado.id;
+          }
+          
+          // Comparar por nome se tipo_id não existir OU comparar por ID se existir
+          const matchPorId = !isNaN(tituloTipoId) && !isNaN(tipoSelecionadoId) && tituloTipoId === tipoSelecionadoId
+          const matchPorNome = titulo.tipo === filtrosAtuais.tipo
+          const match = matchPorId || matchPorNome
+          
+          // Log para debug em casos específicos
+          if (titulo.id === resultado[0]?.id) {
+            console.log('Avaliando título exemplo:', { 
+              id: titulo.id, 
+              tipo_id: titulo.tipo_id,
+              tipo_id_processado: tituloTipoId,
+              tipo: titulo.tipo, 
+              tipoSelecionadoId: tipoSelecionado.id,
+              tipoSelecionadoId_processado: tipoSelecionadoId,
+              matchPorId: matchPorId,
+              matchPorNome: matchPorNome,
+              match: match
+            })
+          }
+          
+          return match
+        })
+      }
+      console.log('Títulos após filtragem por tipo:', resultado.length)
     }
     
-    // Filtrar por fornecedor
+    // Filtrar por fornecedor - buscando pelo fornecedor_id que corresponde ao nome selecionado
     if (filtrosAtuais.fornecedor) {
-      resultado = resultado.filter(titulo => titulo.fornecedor === filtrosAtuais.fornecedor)
+      // Encontrar o id do fornecedor pelo nome selecionado
+      const fornecedorSelecionado = fornecedores.find(f => f.nome === filtrosAtuais.fornecedor)
+      console.log('Filtrando por fornecedor:', filtrosAtuais.fornecedor, 'ID:', fornecedorSelecionado?.id)
+      console.log('Títulos antes da filtragem por fornecedor:', resultado.length)
+      
+      if (fornecedorSelecionado) {
+        resultado = resultado.filter(titulo => {
+          // Se o fornecedor_id existir no título, comparar com o id do fornecedor selecionado
+          const match = (titulo.fornecedor_id !== undefined && titulo.fornecedor_id === fornecedorSelecionado.id) ||
+                      (titulo.fornecedor_id === undefined && titulo.fornecedor === filtrosAtuais.fornecedor)
+          
+          // Log para debug em casos específicos
+          if (titulo.id === resultado[0]?.id) {
+            console.log('Avaliando título para fornecedor:', { 
+              id: titulo.id, 
+              fornecedor_id: titulo.fornecedor_id, 
+              fornecedor: titulo.fornecedor, 
+              match: match
+            })
+          }
+          
+          return match
+        })
+        console.log('Títulos após filtragem por fornecedor:', resultado.length)
+      }
     }
     
-    // Filtrar por filial
+    // Filtrar por filial - buscando pelo filial_id que corresponde ao nome selecionado
     if (filtrosAtuais.filial) {
-      resultado = resultado.filter(titulo => titulo.filial === filtrosAtuais.filial)
+      // Encontrar o id da filial pelo nome selecionado
+      const filialSelecionada = filiais.find(f => f.nome === filtrosAtuais.filial)
+      console.log('Filtrando por filial:', filtrosAtuais.filial, 'ID:', filialSelecionada?.id)
+      console.log('Títulos antes da filtragem por filial:', resultado.length)
+      
+      if (filialSelecionada) {
+        resultado = resultado.filter(titulo => {
+          // Se o filial_id existir no título, comparar com o id da filial selecionada
+          const match = (titulo.filial_id !== undefined && titulo.filial_id === filialSelecionada.id) ||
+                      (titulo.filial_id === undefined && titulo.filial === filtrosAtuais.filial)
+          
+          // Log para debug em casos específicos
+          if (titulo.id === resultado[0]?.id) {
+            console.log('Avaliando título para filial:', { 
+              id: titulo.id, 
+              filial_id: titulo.filial_id, 
+              filial: titulo.filial, 
+              match: match
+            })
+          }
+          
+          return match
+        })
+        console.log('Títulos após filtragem por filial:', resultado.length)
+      }
     }
     
     // Filtrar por período (data inicial e final) baseado no tipo de filtro selecionado
@@ -297,8 +521,36 @@ const EmissaoTitulos: React.FC = () => {
       resultado = resultado.filter(titulo => titulo.pagamento !== null && titulo.pagamento !== '')
     }
     
+    // Log de diagnóstico final
+    console.log('Resultado final da filtragem:', {
+      filtros: filtrosAtuais,
+      totalTitulosOriginais: titulos.length,
+      totalTitulosFiltrados: resultado.length,
+      primeiroTitulo: resultado[0] ? {
+        id: resultado[0].id,
+        tipo: resultado[0].tipo,
+        tipo_id: resultado[0].tipo_id,
+        fornecedor: resultado[0].fornecedor,
+        fornecedor_id: resultado[0].fornecedor_id,
+        filial: resultado[0].filial,
+        filial_id: resultado[0].filial_id
+      } : 'Nenhum título encontrado'
+    })
+    
+    // Atualizar estado
     setTitulosFiltrados(resultado)
-    setPaginaAtual(1) // Resetar para primeira página quando aplicar filtros
+    
+    // Atualizar página para 1 se mudar os filtros
+    setPaginaAtual(1)
+    
+    // Mostrar feedback visual se nenhum título for encontrado
+    if (resultado.length === 0 && titulos.length > 0) {
+      setAlert({
+        open: true,
+        message: 'Nenhum título encontrado com os filtros selecionados.',
+        severity: 'info'
+      })
+    }
   }
   
   // Funções de paginação
@@ -748,14 +1000,14 @@ const EmissaoTitulos: React.FC = () => {
           <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: 'wrap' }}>
             <TextField
               size="small"
-              label="Tipo"
+              label="Tipo de Fornecedor"
               select
               value={filtros.tipo}
               name="tipo"
               onChange={handleFiltroChange}
-              sx={{ minWidth: 150 }}
+              sx={{ minWidth: 200 }}
             >
-              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="">Todos os Tipos</MenuItem>
               {tipos.map((tipo) => (
                 <MenuItem key={tipo.id} value={tipo.nome}>
                   {tipo.nome}
@@ -770,9 +1022,9 @@ const EmissaoTitulos: React.FC = () => {
               value={filtros.fornecedor}
               name="fornecedor"
               onChange={handleFiltroChange}
-              sx={{ minWidth: 200 }}
+              sx={{ minWidth: 220 }}
             >
-              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="">Todos os Fornecedores</MenuItem>
               {fornecedores.map((fornecedor) => (
                 <MenuItem key={fornecedor.id} value={fornecedor.nome}>
                   {fornecedor.nome}
@@ -787,9 +1039,9 @@ const EmissaoTitulos: React.FC = () => {
               value={filtros.filial}
               name="filial"
               onChange={handleFiltroChange}
-              sx={{ minWidth: 150 }}
+              sx={{ minWidth: 180 }}
             >
-              <MenuItem value="">Todas</MenuItem>
+              <MenuItem value="">Todas as Filiais</MenuItem>
               {filiais.map((filial) => (
                 <MenuItem key={filial.id} value={filial.nome}>
                   {filial.nome}

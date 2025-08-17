@@ -46,8 +46,7 @@ const menuItems: MenuItem[] = [
     id: 'dashboard',
     label: 'Dashboard',
     icon: <DashboardIcon />,
-    path: '/dashboard',
-    roles: ['admin', 'atendente', 'medico', 'financeiro']
+    path: '/dashboard'
   },
   {
     id: 'sistema-agendamento',
@@ -58,149 +57,124 @@ const menuItems: MenuItem[] = [
         id: 'dashboard-agendamento',
         label: 'Dashboard',
         icon: <DashboardIcon />,
-        path: '/sistema-agendamento/dashboard',
-        roles: ['super_admin', 'admin', 'atendente', 'medico', 'manager', 'receptionist']
+        path: '/sistema-agendamento/dashboard'
       },
       {
         id: 'datas-disponiveis',
         label: 'Datas Disponíveis',
         icon: <CalendarIcon />,
-        path: '/sistema-agendamento/datas-disponiveis',
-        roles: ['super_admin', 'admin', 'atendente', 'manager', 'receptionist']
+        path: '/sistema-agendamento/datas-disponiveis'
       },
       {
         id: 'medicos-agendamento',
         label: 'Médicos',
         icon: <DoctorIcon />,
-        path: '/sistema-agendamento/medicos',
-        roles: ['super_admin', 'admin', 'atendente', 'manager', 'receptionist']
+        path: '/sistema-agendamento/medicos'
       },
       {
         id: 'cidades-agendamento',
         label: 'Filiais',
         icon: <CityIcon />,
-        path: '/sistema-agendamento/cidades',
-        roles: ['super_admin', 'admin', 'atendente', 'manager', 'receptionist']
+        path: '/sistema-agendamento/cidades'
       },
       {
         id: 'clientes-agendamento',
         label: 'Clientes',
         icon: <PeopleIcon />,
-        path: '/sistema-agendamento/clientes',
-        roles: ['super_admin', 'admin', 'atendente', 'medico', 'manager', 'receptionist']
+        path: '/sistema-agendamento/clientes'
       },
       {
         id: 'agendamentos',
         label: 'Agendamentos',
         icon: <CalendarIcon />,
-        path: '/sistema-agendamento/agendamentos',
-        roles: ['super_admin', 'admin', 'atendente', 'medico', 'manager', 'receptionist']
+        path: '/sistema-agendamento/agendamentos'
       },
       {
         id: 'financeiro-agendamento',
         label: 'Financeiro',
         icon: <MoneyIcon />,
-        path: '/sistema-agendamento/financeiro',
-        roles: ['super_admin', 'admin', 'financeiro', 'manager', 'financial']
+        path: '/sistema-agendamento/financeiro'
       },
       {
         id: 'historico-agendamento',
         label: 'Histórico',
         icon: <CalendarIcon />,
-        path: '/sistema-agendamento/historico',
-        roles: ['super_admin', 'admin', 'atendente', 'medico', 'manager', 'receptionist']
+        path: '/sistema-agendamento/historico'
       },
       {
         id: 'gerenciar-usuarios',
         label: 'Gerenciar Usuários',
         icon: <PeopleIcon />,
-        path: '/sistema-agendamento/usuarios',
-        roles: ['super_admin', 'admin']
+        path: '/sistema-agendamento/usuarios'
       }
-    ],
-    roles: ['super_admin', 'admin', 'atendente', 'medico', 'financeiro', 'manager', 'receptionist', 'financial']
+    ]
   },
-  // Menu Cadastros removido
-  // Menu Financeiro removido
-  // Menu Ordens de Serviço removido
   {
     id: 'cmv',
     label: 'CMV',
     icon: <ReceiptIcon />,
     children: [
-      {        id: 'medicos',        label: 'Médicos',        icon: <DoctorIcon />,        path: '/cmv/medicos',        roles: ['super_admin', 'admin', 'manager', 'financial']      },
       {
         id: 'tipos-fornecedores',
         label: 'Tipos de Fornecedores',
         icon: <BusinessIcon />,
-        path: '/cmv/tipos-fornecedores',
-        roles: ['super_admin', 'admin', 'manager', 'financial']
+        path: '/cmv/tipos-fornecedores'
       },
       {
         id: 'fornecedores',
         label: 'Fornecedores',
         icon: <BusinessIcon />,
-        path: '/cmv/fornecedores',
-        roles: ['super_admin', 'admin', 'manager', 'financial']
+        path: '/cmv/fornecedores'
       },
       {
         id: 'titulos',
         label: 'Títulos',
         icon: <ReceiptIcon />,
-        path: '/cmv/titulos',
-        roles: ['super_admin', 'admin', 'manager', 'financial']
+        path: '/cmv/titulos'
       },
       {
         id: 'extrato-titulos',
         label: 'Extrato de Títulos',
         icon: <ReceiptIcon />,
-        path: '/cmv/extrato-titulos',
-        roles: ['super_admin', 'admin', 'manager', 'financial']
+        path: '/cmv/extrato-titulos'
       },
       {
         id: 'categorias-despesas',
         label: 'Categorias de Despesas',
         icon: <ReceiptIcon />,
-        path: '/cmv/categorias-despesas',
-        roles: ['super_admin', 'admin', 'manager', 'financial']
+        path: '/cmv/categorias-despesas'
       },
       {
         id: 'despesas-fixas',
         label: 'Despesas Fixas',
         icon: <ReceiptIcon />,
-        path: '/cmv/despesas-fixas',
-        roles: ['super_admin', 'admin', 'manager', 'financial']
+        path: '/cmv/despesas-fixas'
       },
       {
         id: 'despesas-diversas',
         label: 'Despesas Diversas',
         icon: <ReceiptIcon />,
-        path: '/cmv/despesas-diversas',
-        roles: ['super_admin', 'admin', 'manager', 'financial']
+        path: '/cmv/despesas-diversas'
       },
       {
         id: 'extrato-despesas',
         label: 'Extrato Despesas',
         icon: <ReceiptIcon />,
-        path: '/cmv/extrato-despesas',
-        roles: ['super_admin', 'admin', 'manager', 'financial']
+        path: '/cmv/extrato-despesas'
       },
       {
         id: 'custo-os',
         label: 'Custo de OS',
         icon: <OrderIcon />,
-        path: '/cmv/custo-os',
-        roles: ['super_admin', 'admin', 'manager', 'financial']
+        path: '/cmv/custo-os'
       },
       {
         id: 'relatorio-os',
         label: 'Relatório de OS',
         icon: <ReportIcon />,
-        path: '/cmv/relatorio-os',
-        roles: ['super_admin', 'admin', 'manager', 'financial']
+        path: '/cmv/relatorio-os'
       }
-    ],
-    roles: ['super_admin', 'admin', 'manager', 'financial']
+    ]
   },
   {
     id: 'configuracoes',
@@ -211,12 +185,9 @@ const menuItems: MenuItem[] = [
         id: 'usuarios',
         label: 'Usuários',
         icon: <PeopleIcon />,
-        path: '/configuracoes/usuarios',
-        roles: ['super_admin', 'admin']
+        path: '/configuracoes/usuarios'
       }
-      
-    ],
-    roles: ['super_admin', 'admin', 'manager']
+    ]
   }
 ]
 
@@ -227,8 +198,8 @@ export function Sidebar() {
   const [openMenus, setOpenMenus] = useState<string[]>(['sistema-agendamento', 'cmv'])
 
   const hasPermission = (roles?: string[]) => {
-    if (!roles || !userData?.role) return true
-    return roles.includes(userData.role)
+    // Durante desenvolvimento, todas as rotas estão acessíveis
+    return true
   }
 
   const handleMenuClick = (item: MenuItem) => {

@@ -24,9 +24,21 @@ import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 
 // Declaração para o plugin autotable
+interface AutoTableOptions {
+  head?: string[][];
+  body?: (string | number)[][];
+  startY?: number;
+  margin?: { top?: number; right?: number; bottom?: number; left?: number };
+  styles?: { fontSize?: number; cellPadding?: number };
+  headStyles?: { fillColor?: number[]; textColor?: number[] };
+  columnStyles?: { [key: number]: { cellWidth?: number; halign?: string } };
+  theme?: string;
+  [key: string]: unknown;
+}
+
 declare module 'jspdf' {
   interface jsPDF {
-    autoTable: (options: any) => jsPDF
+    autoTable: (options: AutoTableOptions) => jsPDF
   }
 }
 

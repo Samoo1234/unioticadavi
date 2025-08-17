@@ -109,7 +109,7 @@ const permissionCategories = {
   'agendamentos': 'Agendamentos',
   'clientes': 'Clientes',
   'medicos': 'Médicos',
-  'cidades': 'Cidades',
+  'filiais': 'Filiais',
   'financeiro': 'Financeiro',
   'relatorios': 'Relatórios',
   'usuarios': 'Usuários',

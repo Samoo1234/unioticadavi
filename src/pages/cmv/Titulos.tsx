@@ -1,36 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import { supabase } from '@/services/supabase';
+import {
   Box, 
   Typography, 
   Card, 
   CardContent, 
   TextField, 
   Button, 
-  IconButton, 
-  List, 
-  ListItem, 
-  ListItemText, 
-  ListItemSecondaryAction, 
-  MenuItem,
-  CircularProgress,
+  MenuItem, 
   Snackbar,
-  Alert
+  Alert, 
+  CircularProgress, 
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { supabase } from '@/services/supabase';
-import { formatarData, getDataAtualISO } from '@/utils/dateUtils';
-
-// Função para formatar data no formato dd/mm/yyyy
-const formatarDataLocal = (data: string): string => {
-  return formatarData(data);
-};
+import { formatarData } from '@/utils/dateUtils';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs from 'dayjs';
 
 // Interface local para o formulário
 interface FormTitulo {
   id?: number;
-  filial: string;
-  fornecedor: string;
+  filial?: string;
+  fornecedor?: string;
+  filial_id?: number;
+  fornecedor_id?: number;
   vencimento: string;
   valor: string;
   observacoes: string;
@@ -49,7 +48,6 @@ interface Titulo {
   fornecedor_id: number;
   filial_id: number;
   tipo: string;
-  data_emissao: string;
   data_vencimento: string;
   valor: number;
   status: 'pendente' | 'pago' | 'cancelado';
@@ -87,6 +85,78 @@ const Titulos: React.FC = () => {
   const [quantidadeTitulos, setQuantidadeTitulos] = useState(1);
   const [itensTitulos, setItensTitulos] = useState<TituloItem[]>([{vencimento: '', valor: ''}]);
 
+  // Função para carregar filiais
+  const carregarFiliais = async () => {
+    try {
+      const { data: dadosFiliais, error: errorFiliais } = await supabase
+        .from('filiais')
+        .select('id, nome')
+        .eq('ativo', true) // Filtra apenas filiais ativas, se existir coluna ativo
+        .order('nome', { ascending: true });
+
+      if (errorFiliais) {
+        // Se der erro por causa do filtro 'ativo', tenta novamente sem o filtro
+        if (errorFiliais.code === '42703') { // código para coluna inexistente
+          const { data: allFiliais, error: secondError } = await supabase
+            .from('filiais')
+            .select('id, nome')
+            .order('nome', { ascending: true });
+          
+          if (secondError) throw secondError;
+          return allFiliais || [];
+        }
+        throw errorFiliais;
+      }
+
+      return dadosFiliais || [];
+    } catch (error) {
+      console.error('Erro ao carregar filiais:', error);
+      setAlert({
+        open: true,
+        message: 'Erro ao carregar filiais. Tente novamente.',
+        severity: 'error'
+      });
+      return [];
+    }
+  };
+
+  // Função para carregar fornecedores
+  const carregarFornecedores = async () => {
+    try {
+      const { data: dadosFornecedores, error: errorFornecedores } = await supabase
+        .from('fornecedores')
+        .select('id, nome, tipo_id')
+        .eq('ativo', true) // Filtra apenas fornecedores ativos
+        .order('nome', { ascending: true });
+
+      if (errorFornecedores) throw errorFornecedores;
+
+      // Carregar tipos de fornecedores para obter o nome do tipo
+      const { data: tiposFornecedores } = await supabase
+        .from('tipos_fornecedores')
+        .select('id, nome');
+
+      // Mapear fornecedores incluindo o nome do tipo e tipo_id
+      return dadosFornecedores?.map(f => {
+        const tipoFornecedor = tiposFornecedores?.find(tipo => tipo.id === f.tipo_id);
+        return {
+          id: f.id,
+          nome: f.nome,
+          tipo_id: f.tipo_id, // Incluir tipo_id para uso posterior
+          tipo: tipoFornecedor?.nome || 'Tipo não especificado'
+        };
+      }) || [];
+    } catch (error) {
+      console.error('Erro ao carregar fornecedores:', error);
+      setAlert({
+        open: true,
+        message: 'Erro ao carregar fornecedores. Tente novamente.',
+        severity: 'error'
+      });
+      return [];
+    }
+  };
+
   // Carregar dados iniciais
   useEffect(() => {
     const carregarDados = async () => {
@@ -100,35 +170,13 @@ const Titulos: React.FC = () => {
 
         if (errorTitulos) throw errorTitulos;
 
-        // Carregar filiais
-        const { data: dadosFiliais, error: errorFiliais } = await supabase
-          .from('filiais')
-          .select('id, nome')
-          .order('nome', { ascending: true });
-
-        if (errorFiliais) throw errorFiliais;
-
-        // Carregar fornecedores
-        const { data: dadosFornecedores, error: errorFornecedores } = await supabase
-          .from('fornecedores')
-          .select('id, nome, tipo')
-          .order('nome', { ascending: true });
-
-        if (errorFornecedores) throw errorFornecedores;
-
-        // Mapear filiais para o formato {id, nome}
-        const filiaisFormatadas = dadosFiliais?.map(f => ({
-          id: f.id,
-          nome: f.nome
-        })) || [];
+        // Carregar filiais e fornecedores em paralelo para melhor performance
+        const [filiaisFormatadas, fornecedoresFormatados] = await Promise.all([
+          carregarFiliais(),
+          carregarFornecedores()
+        ]);
+        
         setFiliais(filiaisFormatadas);
-
-        // Mapear fornecedores para o formato {id, nome, tipo}
-        const fornecedoresFormatados = dadosFornecedores?.map(f => ({
-          id: f.id,
-          nome: f.nome,
-          tipo: f.tipo || 'Não especificado'
-        })) || [];
         setFornecedores(fornecedoresFormatados);
 
         // Converter os dados dos títulos para o formato do formulário
@@ -166,7 +214,40 @@ const Titulos: React.FC = () => {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    
+    // Validação especial para campo monetário
+    if (name === 'valor') {
+      // Remove caracteres não numéricos exceto ponto e vírgula
+      let numericValue = value.replace(/[^0-9.,]/g, '');
+      
+      // Converte vírgula para ponto se necessário
+      numericValue = numericValue.replace(/,/g, '.');
+      
+      // Se tiver mais de um ponto, mantém apenas o último
+      if ((numericValue.match(/\./g) || []).length > 1) {
+        const parts = numericValue.split('.');
+        numericValue = parts.slice(0, -1).join('') + '.' + parts.slice(-1);
+      }
+      
+      // Limita a duas casas decimais
+      const parts = numericValue.split('.');
+      if (parts.length > 1 && parts[1].length > 2) {
+        parts[1] = parts[1].slice(0, 2);
+        numericValue = parts.join('.');
+      }
+      
+      // Formata com R$
+      const formattedValue = numericValue ? `R$ ${numericValue}` : '';
+      
+      setForm((prev) => ({ ...prev, [name]: numericValue }));
+      
+      // Atualiza o valor exibido no input
+      e.target.value = formattedValue;
+      return;
+    }
+    
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   // Atualiza a quantidade de títulos
@@ -220,7 +301,7 @@ const Titulos: React.FC = () => {
         return;
       }
     }
-    if (!form.filial || !form.fornecedor || !form.vencimento || !form.valor || isNaN(parseFloat(form.valor))) {
+    if (!form.filial_id || !form.fornecedor_id || !form.vencimento || !form.valor || isNaN(parseFloat(form.valor))) {
       setAlert({
         open: true,
         message: 'Preencha todos os campos obrigatórios.',
@@ -231,9 +312,8 @@ const Titulos: React.FC = () => {
 
     setIsLoading(true);
     try {
-      // Encontrar o ID do fornecedor pelo nome
-      const fornecedorSelecionado = fornecedores.find(f => f.nome === form.fornecedor);
-      if (!fornecedorSelecionado) {
+      // Verificar se o fornecedor_id existe e garantir que é um número
+      if (form.fornecedor_id === undefined || form.fornecedor_id === null) {
         setAlert({
           open: true,
           message: 'Fornecedor não encontrado. Por favor, selecione um fornecedor válido.',
@@ -243,8 +323,17 @@ const Titulos: React.FC = () => {
         return;
       }
       
-      // Encontrar o ID da filial pelo nome
-      const filialSelecionada = filiais.find(f => f.nome === form.filial);
+      // Verificar se o filial_id existe e garantir que é um número
+      if (form.filial_id === undefined || form.filial_id === null) {
+        setAlert({
+          open: true,
+          message: 'Por favor, selecione uma filial válida.',
+          severity: 'error'
+        });
+        setIsLoading(false);
+        return;
+      }
+      const filialSelecionada = filiais.find(f => f.id === form.filial_id);
       if (!filialSelecionada) {
         setAlert({
           open: true,
@@ -258,16 +347,40 @@ const Titulos: React.FC = () => {
       // Gerar próximo número sequencial
       const proximoNumero = await getProximoNumero();
       
+      // Buscar o objeto fornecedor para obter o tipo
+      const fornecedorObj = fornecedores.find(f => f.id === form.fornecedor_id);
+      if (!fornecedorObj) {
+        setAlert({
+          open: true,
+          message: 'Fornecedor não encontrado no sistema.',
+          severity: 'error'
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      // Buscar tipo_id do fornecedor selecionado
+      const fornecedorSelecionado = fornecedores.find(f => f.id === form.fornecedor_id);
+      if (!fornecedorSelecionado?.tipo_id) {
+        setAlert({
+          open: true,
+          message: 'Erro: tipo_id do fornecedor não encontrado. Por favor, selecione outro fornecedor.',
+          severity: 'error'
+        });
+        setIsLoading(false);
+        return;
+      }
+      
       const tituloData = {
         numero: proximoNumero,
-        fornecedor_id: fornecedorSelecionado.id,
-        filial_id: filialSelecionada.id,
+        fornecedor_id: form.fornecedor_id,
+        filial_id: form.filial_id,
+        tipo_id: fornecedorSelecionado.tipo_id, // Adicionar tipo_id do fornecedor
         valor: parseFloat(form.valor),
-        data_emissao: getDataAtualISO(),
         data_vencimento: form.vencimento || '',
         status: 'pendente' as const,
         observacao: form.observacoes || undefined,
-        tipo: fornecedorSelecionado.tipo
+        tipo: 'pagar' // Usar valor válido para a constraint valid_tipo
       };
 
       if (editId) {
@@ -303,8 +416,8 @@ const Titulos: React.FC = () => {
         }
       } else if (multiplosTitulos) {
         // Cadastrar múltiplos títulos
-        const fornecedorObj = fornecedores.find(f => f.nome === form.fornecedor);
-        const filialObj = filiais.find(f => f.nome === form.filial);
+        const fornecedorObj = fornecedores.find(f => f.id === form.fornecedor_id);
+        const filialObj = filiais.find(f => f.id === form.filial_id);
 
         if (!fornecedorObj || !filialObj) {
           setAlert({
@@ -323,12 +436,17 @@ const Titulos: React.FC = () => {
             // Gerar próximo número sequencial para cada título
             const numeroTitulo = await getProximoNumero();
             
+            const fornecedorSelecionado = fornecedores.find(f => f.id === form.fornecedor_id);
+            if (!fornecedorSelecionado?.tipo_id) {
+              throw new Error('tipo_id do fornecedor não encontrado');
+            }
+            
             const tituloData = {
-              fornecedor_id: fornecedorObj.id,
-              filial_id: filialObj.id,
+              fornecedor_id: form.fornecedor_id,
+              filial_id: form.filial_id,
               numero: numeroTitulo,
-              tipo: fornecedorObj.tipo,
-              data_emissao: getDataAtualISO(),
+              tipo_id: fornecedorSelecionado.tipo_id, // Adicionar tipo_id do fornecedor
+              tipo: 'pagar', // Usar valor válido para a constraint valid_tipo
               data_vencimento: item.vencimento,
               valor: parseFloat(item.valor),
               status: 'pendente' as const,
@@ -434,11 +552,17 @@ const Titulos: React.FC = () => {
   const handleEdit = (id: number) => {
     const titulo = titulos.find(t => t.id === id);
     if (titulo) {
-      // Criar um objeto apenas com os campos do formulário
+      // Encontrar o ID da filial e fornecedor pelos nomes
+      const filialObj = filiais.find(f => f.nome === titulo.filial);
+      const fornecedorObj = fornecedores.find(f => f.nome === titulo.fornecedor);
+      
+      // Criar um objeto com os campos do formulário incluindo os IDs
       const formData: FormTitulo = {
         id: titulo.id,
         filial: titulo.filial,
         fornecedor: titulo.fornecedor,
+        filial_id: filialObj?.id,
+        fornecedor_id: fornecedorObj?.id,
         vencimento: titulo.vencimento,
         valor: titulo.valor,
         observacoes: titulo.observacoes
@@ -555,18 +679,20 @@ const Titulos: React.FC = () => {
                   select
                   fullWidth
                   label="Filial"
-                  name="filial"
-                  value={form.filial || ''}
+                  name="filial_id"
+                  value={form.filial_id || ''}
                   onChange={handleChange}
                   margin="normal"
                   required
                   disabled={isLoading || filiais.length === 0}
                 >
-                  {filiais.length === 0 ? (
+                  {isLoading ? (
                     <MenuItem disabled>Carregando filiais...</MenuItem>
+                  ) : filiais.length === 0 ? (
+                    <MenuItem disabled>Nenhuma filial encontrada</MenuItem>
                   ) : (
                     filiais.map((filial) => (
-                      <MenuItem key={filial.id} value={filial.nome}>
+                      <MenuItem key={filial.id} value={filial.id}>
                         {filial.nome}
                       </MenuItem>
                     ))
@@ -576,19 +702,21 @@ const Titulos: React.FC = () => {
                   select
                   fullWidth
                   label="Fornecedor"
-                  name="fornecedor"
-                  value={form.fornecedor || ''}
+                  name="fornecedor_id"
+                  value={form.fornecedor_id || ''}
                   onChange={handleChange}
                   margin="normal"
                   required
                   disabled={isLoading || fornecedores.length === 0}
                 >
-                  {fornecedores.length === 0 ? (
+                  {isLoading ? (
                     <MenuItem disabled>Carregando fornecedores...</MenuItem>
+                  ) : fornecedores.length === 0 ? (
+                    <MenuItem disabled>Nenhum fornecedor encontrado</MenuItem>
                   ) : (
                     fornecedores.map((fornecedor) => (
-                      <MenuItem key={fornecedor.id} value={fornecedor.nome}>
-                        {fornecedor.nome}
+                      <MenuItem key={fornecedor.id} value={fornecedor.id}>
+                        {fornecedor.nome} ({fornecedor.tipo})
                       </MenuItem>
                     ))
                   )}
@@ -597,15 +725,25 @@ const Titulos: React.FC = () => {
                 {/* Campos normais ou campos para múltiplos títulos */}
                 {!multiplosTitulos ? (
                   <>
-                    <TextField
+                    <DatePicker
                       label="Data de Vencimento"
-                      name="vencimento"
-                      type="date"
-                      value={form.vencimento || ''}
-                      onChange={handleChange}
-                      InputLabelProps={{ shrink: true }}
-                      fullWidth
-                      required
+                      value={form.vencimento ? dayjs(form.vencimento) : null}
+                      onChange={(novaData) => {
+                        if (novaData) {
+                          const dataFormatada = novaData.format('YYYY-MM-DD')
+                          setForm(prev => ({ ...prev, vencimento: dataFormatada }))
+                        } else {
+                          setForm(prev => ({ ...prev, vencimento: '' }))
+                        }
+                      }}
+                      format="DD/MM/YYYY"
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          name: "vencimento",
+                          required: true
+                        }
+                      }}
                     />
                     <TextField
                       label="Valor"
@@ -634,14 +772,24 @@ const Titulos: React.FC = () => {
                           Título {index + 1}
                         </Typography>
                         <Box display="flex" gap={2}>
-                          <TextField
+                          <DatePicker
                             label="Data de Vencimento"
-                            type="date"
-                            value={item.vencimento}
-                            onChange={(e) => handleItemTituloChange(index, 'vencimento', e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                            fullWidth
-                            required
+                            value={item.vencimento ? dayjs(item.vencimento) : null}
+                            onChange={(novaData) => {
+                              if (novaData) {
+                                const dataISO = novaData.format('YYYY-MM-DD')
+                                handleItemTituloChange(index, 'vencimento', dataISO)
+                              } else {
+                                handleItemTituloChange(index, 'vencimento', '')
+                              }
+                            }}
+                            format="DD/MM/YYYY"
+                            slotProps={{
+                              textField: {
+                                fullWidth: true,
+                                required: true
+                              }
+                            }}
                           />
                           <TextField
                             label="Valor"
@@ -703,8 +851,15 @@ const Titulos: React.FC = () => {
                 {titulos.map((titulo) => (
                   <ListItem key={titulo.id} divider>
                     <ListItemText
-                      primary={`${titulo.fornecedor} - ${titulo.filial}`}
-                      secondary={`Vencimento: ${formatarData(titulo.vencimento)} | Valor: R$ ${parseFloat(titulo.valor).toFixed(2)} | Status: ${titulo.status}`}
+                      primary={`N° ${titulo.numero} - ${titulo.fornecedor} - ${titulo.filial}`}
+                      secondary={
+                        <>
+                          <span>Tipo: {titulo.tipo} | </span>
+                          <span>Vencimento: {formatarData(titulo.vencimento)} | </span>
+                          <span>Valor: R$ {parseFloat(titulo.valor).toFixed(2)} | </span>
+                          <span>Status: {titulo.status}</span>
+                        </>
+                      }
                     />
                     <ListItemSecondaryAction>
                       <IconButton

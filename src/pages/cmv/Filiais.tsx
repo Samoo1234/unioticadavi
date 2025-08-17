@@ -39,7 +39,6 @@ const initialFormState: Omit<Filial, 'id' | 'created_at' | 'updated_at'> = {
   nome: '',
   endereco: '',
   telefone: '',
-  responsavel: '',
   ativa: true
 };
 
@@ -71,7 +70,7 @@ export function Filiais() {
       }
 
       setFiliais(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao carregar filiais:', error);
       toast.error('Erro ao carregar filiais');
     } finally {
@@ -117,7 +116,6 @@ export function Filiais() {
         nome: filial.nome,
         endereco: filial.endereco,
         telefone: filial.telefone || '',
-        responsavel: filial.responsavel || '',
         ativa: filial.ativa
       });
     } else {
@@ -143,7 +141,6 @@ export function Filiais() {
         nome: form.nome.trim(),
         endereco: form.endereco.trim(),
         telefone: form.telefone?.trim() || null,
-        responsavel: form.responsavel?.trim() || null,
         ativa: form.ativa,
         updated_at: new Date().toISOString()
       };
@@ -174,15 +171,16 @@ export function Filiais() {
 
       handleCloseDialog();
       loadFiliais();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const dbError = error as { code?: string; message?: string }
       console.error('Erro ao salvar filial:', error);
       
       let errorMessage = 'Erro ao salvar filial';
       
-      if (error.message) {
-        if (error.message.includes('duplicate key')) {
+      if (dbError.message) {
+        if (dbError.message.includes('duplicate key')) {
           errorMessage = 'Já existe uma filial com este nome';
-        } else if (error.message.includes('foreign key constraint')) {
+        } else if (dbError.message.includes('foreign key constraint')) {
           errorMessage = 'Esta filial possui vínculos com outros registros';
         }
       }
@@ -242,7 +240,7 @@ export function Filiais() {
       loadFiliais();
       setDeleteDialogOpen(false);
       setFilialToDelete(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao excluir filial:', error);
       toast.error('Erro ao excluir filial');
     } finally {
@@ -253,8 +251,7 @@ export function Filiais() {
   const filteredFiliais = filiais.filter(filial =>
     filial.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
     filial.endereco.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (filial.telefone && filial.telefone.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (filial.responsavel && filial.responsavel.toLowerCase().includes(searchTerm.toLowerCase()))
+    (filial.telefone && filial.telefone.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   if (loading && filiais.length === 0) {
@@ -304,7 +301,6 @@ export function Filiais() {
               <TableCell>Nome</TableCell>
               <TableCell>Endereço</TableCell>
               <TableCell>Telefone</TableCell>
-              <TableCell>Responsável</TableCell>
               <TableCell>Status</TableCell>
               <TableCell align="center">Ações</TableCell>
             </TableRow>
@@ -322,7 +318,6 @@ export function Filiais() {
                   <TableCell>{filial.nome}</TableCell>
                   <TableCell>{filial.endereco}</TableCell>
                   <TableCell>{filial.telefone || '-'}</TableCell>
-                  <TableCell>{filial.responsavel || '-'}</TableCell>
                   <TableCell>
                     {filial.ativa ? (
                       <Alert severity="success" icon={false} sx={{ py: 0 }}>
@@ -384,14 +379,6 @@ export function Filiais() {
               label="Telefone"
               name="telefone"
               value={form.telefone}
-              onChange={handleChange}
-              fullWidth
-              disabled={submitting}
-            />
-            <TextField
-              label="Responsável"
-              name="responsavel"
-              value={form.responsavel}
               onChange={handleChange}
               fullWidth
               disabled={submitting}

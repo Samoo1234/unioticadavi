@@ -25,16 +25,18 @@ import {
   IconButton,
   Tooltip,
   Alert,
-  Snackbar
+  Snackbar,
+  InputAdornment,
+  FormHelperText
 } from '@mui/material'
 import {
   Add as AddIcon,
   Payment as PaymentIcon,
-  Pending as PendingIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Clear as ClearIcon,
-  PictureAsPdf as PictureAsPdfIcon
+  FilterList as FilterListIcon,
+  Clear as ClearIcon
+  // Ícone de PDF removido conforme centralização de relatórios
 } from '@mui/icons-material'
 import { supabase } from '../../services/supabase'
 
@@ -63,6 +65,13 @@ interface DespesaDiversaCompleta {
   categoria_nome?: string
 }
 
+interface FormErrors {
+  filial_id?: string
+  valor?: string
+  categoria_id?: string
+  data_despesa?: string
+}
+
 export default function DespesasDiversas() {
   const [despesas, setDespesas] = useState<DespesaDiversaCompleta[]>([])
   const [despesasFiltradas, setDespesasFiltradas] = useState<DespesaDiversaCompleta[]>([])
@@ -70,14 +79,14 @@ export default function DespesasDiversas() {
   const [categorias, setCategorias] = useState<CategoriaType[]>([])
   const [loading, setLoading] = useState(true)
   const [openDialog, setOpenDialog] = useState(false)
-  const [openPaymentDialog, setOpenPaymentDialog] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [payingDespesa, setPayingDespesa] = useState<DespesaDiversaCompleta | null>(null)
   const [alert, setAlert] = useState({ show: false, message: '', severity: 'success' as 'success' | 'error' })
+  const [formErrors, setFormErrors] = useState<FormErrors>({})
   
   // Filtros
   const [filtros, setFiltros] = useState({
     filial_id: 'todas',
+    categoria_id: 'todas',
     data_inicial: '',
     data_final: ''
   })
@@ -89,10 +98,6 @@ export default function DespesasDiversas() {
     data_despesa: new Date().toISOString().split('T')[0]
   })
 
-  const [paymentData, setPaymentData] = useState({
-    data_pagamento: new Date().toISOString().split('T')[0],
-    forma_pagamento: ''
-  })
 
   useEffect(() => {
     loadDespesas()
@@ -150,9 +155,9 @@ export default function DespesasDiversas() {
   const loadCategorias = async () => {
     try {
       const { data, error } = await supabase
-        .from('categorias')
+        .from('categorias_despesas')
         .select('id, nome')
-        .eq('tipo', 'despesa_diversa')
+        .eq('tipo', 'diversa')
         .order('nome')
 
       if (error) throw error
@@ -168,6 +173,11 @@ export default function DespesasDiversas() {
     // Filtro por filial
     if (filtros.filial_id !== 'todas') {
       filtered = filtered.filter(d => d.filial_id.toString() === filtros.filial_id)
+    }
+    
+    // Filtro por categoria
+    if (filtros.categoria_id !== 'todas') {
+      filtered = filtered.filter(d => d.categoria_id?.toString() === filtros.categoria_id)
     }
 
     // Filtro por data inicial
@@ -225,47 +235,55 @@ export default function DespesasDiversas() {
         data_despesa: new Date().toISOString().split('T')[0]
       })
     }
+    setFormErrors({})
     setOpenDialog(true)
   }
 
   const handleCloseDialog = () => {
     setOpenDialog(false)
     setEditingId(null)
+    setFormErrors({})
   }
 
-  const handleOpenPaymentDialog = (despesa: DespesaDiversaCompleta) => {
-    setPayingDespesa(despesa)
-    setPaymentData({
-      data_pagamento: new Date().toISOString().split('T')[0],
-      forma_pagamento: ''
-    })
-    setOpenPaymentDialog(true)
-  }
-
-  const handleClosePaymentDialog = () => {
-    setOpenPaymentDialog(false)
-    setPayingDespesa(null)
-  }
 
   const handleSubmit = async () => {
+    // Validar formulário
+    const errors: FormErrors = {}
+
+    if (!formData.valor || parseFloat(formData.valor) <= 0) {
+      errors.valor = 'Valor deve ser maior que zero'
+    }
+
+    if (!formData.filial_id) {
+      errors.filial_id = 'Filial é obrigatória'
+    }
+    
+    if (!formData.data_despesa) {
+      errors.data_despesa = 'Data da despesa é obrigatória'
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      return
+    }
+    
     try {
-      if (!formData.valor || parseFloat(formData.valor) <= 0) {
-        showAlert('Valor deve ser maior que zero', 'error')
-        return
-      }
-
-      if (!formData.filial_id) {
-        showAlert('Filial é obrigatória', 'error')
-        return
-      }
-
+      // Buscar o nome da categoria selecionada
+      const categoria = formData.categoria_id ? 
+        categorias.find(c => c.id.toString() === formData.categoria_id) : null;
+      
+      // Importante: Não incluir o campo 'id' para que o banco gere automaticamente
       const despesaData = {
         filial_id: parseInt(formData.filial_id),
         categoria_id: formData.categoria_id ? parseInt(formData.categoria_id) : null,
         nome: 'Despesa Diversa',
+        descricao: categoria ? `Despesa Diversa - ${categoria.nome}` : 'Despesa Diversa',
         valor: parseFloat(arredondarDuasCasas(formData.valor)),
+        data: formData.data_despesa, // Campo obrigatório
         data_despesa: formData.data_despesa,
-        status: 'pendente' as const
+        data_pagamento: formData.data_despesa, // Já marca como pago na data da despesa
+        status: 'pago' as const, // Sempre pago
+        forma_pagamento: 'À vista' // Padrão para forma de pagamento
       }
 
       if (editingId) {
@@ -293,49 +311,7 @@ export default function DespesasDiversas() {
     }
   }
 
-  const handlePayment = async () => {
-    if (!payingDespesa) return
 
-    try {
-      const { error } = await supabase
-        .from('despesas_diversas')
-        .update({
-          status: 'pago',
-          data_pagamento: paymentData.data_pagamento,
-          forma_pagamento: paymentData.forma_pagamento || null
-        })
-        .eq('id', payingDespesa.id)
-
-      if (error) throw error
-      
-      showAlert('Despesa marcada como paga!', 'success')
-      handleClosePaymentDialog()
-      loadDespesas()
-    } catch (error) {
-      console.error('Erro ao marcar como pago:', error)
-      showAlert('Erro ao marcar como pago', 'error')
-    }
-  }
-
-  const handleMarkAsPending = async (id: number) => {
-    try {
-      const { error } = await supabase
-        .from('despesas_diversas')
-        .update({
-          status: 'pendente',
-          data_pagamento: null,
-          forma_pagamento: null
-        })
-        .eq('id', id)
-
-      if (error) throw error
-      showAlert('Despesa marcada como pendente!', 'success')
-      loadDespesas()
-    } catch (error) {
-      console.error('Erro ao marcar como pendente:', error)
-      showAlert('Erro ao marcar como pendente', 'error')
-    }
-  }
 
   const handleDelete = async (id: number) => {
     if (confirm('Tem certeza que deseja excluir esta despesa?')) {
@@ -358,6 +334,7 @@ export default function DespesasDiversas() {
   const clearFilters = () => {
     setFiltros({
       filial_id: 'todas',
+      categoria_id: 'todas',
       data_inicial: '',
       data_final: ''
     })
@@ -367,131 +344,36 @@ export default function DespesasDiversas() {
     return despesasFiltradas.reduce((sum, d) => sum + d.valor, 0)
   }
 
-  const getTotalPagas = () => {
-    return despesasFiltradas.filter(d => d.status === 'pago').reduce((sum, d) => sum + d.valor, 0)
-  }
-
-  const getTotalPendentes = () => {
-    return despesasFiltradas.filter(d => d.status === 'pendente').reduce((sum, d) => sum + d.valor, 0)
-  }
-
-  const handleGerarPDF = () => {
-    try {
-      const doc = document.createElement('div')
-      doc.innerHTML = `
-        <html>
-          <head>
-            <title>Relatório de Despesas Diversas</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              h1 { color: #333; text-align: center; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-              th { background-color: #f2f2f2; }
-              .status-pago { color: green; font-weight: bold; }
-              .status-pendente { color: orange; font-weight: bold; }
-              .resumo { margin: 20px 0; padding: 15px; background-color: #f9f9f9; }
-            </style>
-          </head>
-          <body>
-            <h1>Relatório de Despesas Diversas</h1>
-            <p>Data de geração: ${new Date().toLocaleDateString('pt-BR')}</p>
-            <div class="resumo">
-              <h3>Resumo</h3>
-              <p><strong>Total de Despesas:</strong> ${formatValor(getTotalDespesas())}</p>
-              <p><strong>Total Pago:</strong> ${formatValor(getTotalPagas())}</p>
-              <p><strong>Total Pendente:</strong> ${formatValor(getTotalPendentes())}</p>
-              <p><strong>Quantidade:</strong> ${despesasFiltradas.length}</p>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Nome</th>
-                  <th>Filial</th>
-                  <th>Categoria</th>
-                  <th>Valor</th>
-                  <th>Data Despesa</th>
-                  <th>Data Pagamento</th>
-                  <th>Forma Pagamento</th>
-                  <th>Observação</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${despesasFiltradas.map(despesa => `
-                  <tr>
-                    <td class="status-${despesa.status}">${despesa.status}</td>
-                    <td>${despesa.nome}</td>
-                    <td>${despesa.filial_nome}</td>
-                    <td>${despesa.categoria_nome || 'Sem categoria'}</td>
-                    <td>${formatValor(despesa.valor)}</td>
-                    <td>${formatDate(despesa.data_despesa)}</td>
-                    <td>${despesa.data_pagamento ? formatDate(despesa.data_pagamento) : '-'}</td>
-                    <td>${despesa.forma_pagamento || '-'}</td>
-                    <td>${despesa.observacao || '-'}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </body>
-        </html>
-      `
-      
-      const newWindow = window.open('', '_blank')
-      if (newWindow) {
-        newWindow.document.write(doc.innerHTML)
-        newWindow.document.close()
-        newWindow.print()
-      }
-      
-      showAlert('Relatório PDF gerado com sucesso!', 'success')
-    } catch (error) {
-      console.error('Erro ao gerar PDF:', error)
-      showAlert('Erro ao gerar relatório PDF', 'error')
-    }
-  }
-
+  // A função de geração de PDF foi removida, pois a funcionalidade foi centralizada na página Extrato de Despesas
+  
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" color="primary">
-          Despesas Diversas
-        </Typography>
-        
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<PictureAsPdfIcon />}
-            onClick={handleGerarPDF}
-            disabled={despesasFiltradas.length === 0}
-          >
-            Gerar PDF
-          </Button>
-          
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
-            Nova Despesa
-          </Button>
-        </Box>
+      
+    <Box sx={{ padding: 2 }}>
+      <Box sx={{ mt: 2, mb: 2, display: 'flex', gap: 2, justifyContent: 'space-between' }}>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog()}
+        >
+          Nova Despesa
+        </Button>
       </Box>
 
-      {/* Filtros */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: 2, p: 1 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            <FilterListIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
             Filtros
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <FormControl size="small" sx={{ minWidth: 150 }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <FormControl sx={{ minWidth: 200 }}>
               <InputLabel>Filial</InputLabel>
               <Select
                 value={filtros.filial_id}
                 onChange={(e) => setFiltros({ ...filtros, filial_id: e.target.value })}
                 label="Filial"
+                size="small"
               >
                 <MenuItem value="todas">Todas</MenuItem>
                 {filiais.map((filial) => (
@@ -501,42 +383,54 @@ export default function DespesasDiversas() {
                 ))}
               </Select>
             </FormControl>
+            
+            <FormControl sx={{ minWidth: 200 }}>
+              <InputLabel>Categoria</InputLabel>
+              <Select
+                value={filtros.categoria_id}
+                onChange={(e) => setFiltros({ ...filtros, categoria_id: e.target.value })}
+                label="Categoria"
+                size="small"
+              >
+                <MenuItem value="todas">Todas</MenuItem>
+                {categorias.map((categoria) => (
+                  <MenuItem key={categoria.id} value={categoria.id.toString()}>
+                    {categoria.nome}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
             <TextField
               label="Data Inicial"
               type="date"
-              size="small"
               value={filtros.data_inicial}
               onChange={(e) => setFiltros({ ...filtros, data_inicial: e.target.value })}
-              InputLabelProps={{
-                shrink: true,
-              }}
-              sx={{ minWidth: 150 }}
+              InputLabelProps={{ shrink: true }}
+              size="small"
             />
             <TextField
               label="Data Final"
               type="date"
-              size="small"
               value={filtros.data_final}
               onChange={(e) => setFiltros({ ...filtros, data_final: e.target.value })}
-              InputLabelProps={{
-                shrink: true,
-              }}
-              sx={{ minWidth: 150 }}
+              InputLabelProps={{ shrink: true }}
+              size="small"
             />
             <Button
               variant="outlined"
+              color="secondary"
               startIcon={<ClearIcon />}
               onClick={clearFilters}
               size="small"
             >
-              Limpar
+              Limpar Filtros
             </Button>
           </Box>
         </CardContent>
       </Card>
-
-      {/* Resumo */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+      
+      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
         <Card sx={{ flex: 1 }}>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
@@ -550,20 +444,10 @@ export default function DespesasDiversas() {
         <Card sx={{ flex: 1 }}>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              Total Pago
+              Total
             </Typography>
             <Typography variant="h5" color="success.main">
-              {formatValor(getTotalPagas())}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card sx={{ flex: 1 }}>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              Total Pendente
-            </Typography>
-            <Typography variant="h5" color="warning.main">
-              {formatValor(getTotalPendentes())}
+              {formatValor(getTotalDespesas())}
             </Typography>
           </CardContent>
         </Card>
@@ -590,11 +474,11 @@ export default function DespesasDiversas() {
                   <TableCell>Filial</TableCell>
                   <TableCell>Categoria</TableCell>
                   <TableCell>Valor</TableCell>
-                  <TableCell>Data Despesa</TableCell>
-                  <TableCell>Data Pagamento</TableCell>
-                  <TableCell>Forma Pagamento</TableCell>
+                  <TableCell>Data da Despesa</TableCell>
+                  <TableCell>Data de Pagamento</TableCell>
+                  <TableCell>Forma de Pagamento</TableCell>
                   <TableCell>Observação</TableCell>
-                  <TableCell align="center">Ações</TableCell>
+                  <TableCell>Ações</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -615,10 +499,10 @@ export default function DespesasDiversas() {
                     <TableRow key={despesa.id}>
                       <TableCell>
                         <Chip
-                          label={despesa.status}
-                          color={despesa.status === 'pago' ? 'success' : 'warning'}
+                          label="Pago"
+                          color="success"
                           size="small"
-                          icon={despesa.status === 'pago' ? <PaymentIcon /> : <PendingIcon />}
+                          icon={<PaymentIcon />}
                         />
                       </TableCell>
                       <TableCell>{despesa.nome}</TableCell>
@@ -642,27 +526,6 @@ export default function DespesasDiversas() {
                               <EditIcon />
                             </IconButton>
                           </Tooltip>
-                          {despesa.status === 'pendente' ? (
-                            <Tooltip title="Marcar como Pago">
-                              <IconButton
-                                onClick={() => handleOpenPaymentDialog(despesa)}
-                                size="small"
-                                color="success"
-                              >
-                                <PaymentIcon />
-                              </IconButton>
-                            </Tooltip>
-                          ) : (
-                            <Tooltip title="Marcar como Pendente">
-                              <IconButton
-                                onClick={() => handleMarkAsPending(despesa.id)}
-                                size="small"
-                                color="warning"
-                              >
-                                <PendingIcon />
-                              </IconButton>
-                            </Tooltip>
-                          )}
                           <Tooltip title="Excluir">
                             <IconButton
                               onClick={() => handleDelete(despesa.id)}
@@ -697,13 +560,15 @@ export default function DespesasDiversas() {
               onChange={handleValorChange}
               fullWidth
               required
+              error={!!formErrors.valor}
+              helperText={formErrors.valor}
               inputProps={{ step: '0.01', min: '0' }}
               InputProps={{
-                startAdornment: 'R$'
+                startAdornment: <InputAdornment position="start">R$</InputAdornment>
               }}
             />
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <FormControl fullWidth required>
+              <FormControl fullWidth required error={!!formErrors.filial_id}>
                 <InputLabel>Filial</InputLabel>
                 <Select
                   value={formData.filial_id}
@@ -716,8 +581,11 @@ export default function DespesasDiversas() {
                     </MenuItem>
                   ))}
                 </Select>
+                {!!formErrors.filial_id && (
+                  <FormHelperText>{formErrors.filial_id}</FormHelperText>
+                )}
               </FormControl>
-              <FormControl fullWidth>
+              <FormControl fullWidth error={!!formErrors.categoria_id}>
                 <InputLabel>Categoria</InputLabel>
                 <Select
                   value={formData.categoria_id}
@@ -731,6 +599,9 @@ export default function DespesasDiversas() {
                     </MenuItem>
                   ))}
                 </Select>
+                {!!formErrors.categoria_id && (
+                  <FormHelperText>{formErrors.categoria_id}</FormHelperText>
+                )}
               </FormControl>
             </Box>
             <TextField
@@ -740,6 +611,8 @@ export default function DespesasDiversas() {
               onChange={(e) => setFormData({ ...formData, data_despesa: e.target.value })}
               fullWidth
               required
+              error={!!formErrors.data_despesa}
+              helperText={formErrors.data_despesa}
               InputLabelProps={{ shrink: true }}
             />
           </Box>
@@ -752,48 +625,6 @@ export default function DespesasDiversas() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog - Pagamento */}
-      <Dialog open={openPaymentDialog} onClose={handleClosePaymentDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          Marcar como Pago
-        </DialogTitle>
-        <DialogContent>
-          {payingDespesa && (
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body1">
-                <strong>Despesa:</strong> {payingDespesa.nome}
-              </Typography>
-              <Typography variant="body1">
-                <strong>Valor:</strong> {formatValor(payingDespesa.valor)}
-              </Typography>
-            </Box>
-          )}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField
-              label="Data do Pagamento"
-              type="date"
-              value={paymentData.data_pagamento}
-              onChange={(e) => setPaymentData({ ...paymentData, data_pagamento: e.target.value })}
-              fullWidth
-              required
-              InputLabelProps={{ shrink: true }}
-            />
-            <TextField
-              label="Forma de Pagamento"
-              value={paymentData.forma_pagamento}
-              onChange={(e) => setPaymentData({ ...paymentData, forma_pagamento: e.target.value })}
-              fullWidth
-              placeholder="Ex: Dinheiro, Cartão, PIX, etc."
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClosePaymentDialog}>Cancelar</Button>
-          <Button onClick={handlePayment} variant="contained" color="success">
-            Marcar como Pago
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <Snackbar
         open={alert.show}

@@ -25,6 +25,7 @@ import {
 import { Settings as SettingsIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material'
 import { supabase } from '@/services/supabase'
 import { formatarData, getDataAtualISO } from '@/utils/dateUtils'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'react-toastify'
 import { DataDisponivel, Filial, Medico, ConfiguracaoHorario } from '@/types'
@@ -280,16 +281,16 @@ export default function DatasDisponiveis() {
     const managerRoles = ['manager']
     const receptionistRoles = ['atendente', 'receptionist']
     
-    if (adminRoles.includes(userData.role)) return true
+    if (adminRoles.includes(userData.role || '')) return true
     
     switch (permission) {
       case 'DATES_VIEW':
-        return [...adminRoles, ...managerRoles, ...receptionistRoles].includes(userData.role)
+        return [...adminRoles, ...managerRoles, ...receptionistRoles].includes(userData.role || '')
       case 'DATES_CREATE':
       case 'DATES_EDIT':
-        return [...adminRoles, ...managerRoles].includes(userData.role)
+        return [...adminRoles, ...managerRoles].includes(userData.role || '')
       case 'DATES_DELETE':
-        return adminRoles.includes(userData.role)
+        return adminRoles.includes(userData.role || '')
       default:
         return false
     }
@@ -477,7 +478,7 @@ export default function DatasDisponiveis() {
           config.horario_inicio,
           config.horario_fim,
           config.intervalo_minutos,
-          config.horarios_almoco
+          (config.horarios_almoco as HorariosAlmoco) || { inicio: '12:00', fim: '13:00' }
         )
 
         // Buscar todas as datas ativas desta filial
@@ -569,7 +570,9 @@ export default function DatasDisponiveis() {
           config.horario_inicio,
           config.horario_fim,
           config.intervalo_minutos,
-          config.horarios_almoco
+          config.horarios_almoco && typeof config.horarios_almoco === 'object' && config.horarios_almoco !== null
+            ? config.horarios_almoco as unknown as HorariosAlmoco
+            : { inicio: '12:00', fim: '13:00' }
         )
       }
 
@@ -739,14 +742,24 @@ export default function DatasDisponiveis() {
               </Grid>
 
               <Grid item xs={12} md={3}>
-                <TextField
-                  fullWidth
+                <DatePicker
                   label="Data *"
-                  type="date"
-                  name="data"
-                  value={formData.data}
-                  onChange={handleInputChange}
-                  InputLabelProps={{ shrink: true }}
+                  value={formData.data ? new Date(formData.data + 'T00:00:00') : null}
+                  onChange={(novaData) => {
+                    if (novaData) {
+                      const dataISO = novaData.toISOString().split('T')[0]
+                      setFormData(prev => ({ ...prev, data: dataISO }))
+                    } else {
+                      setFormData(prev => ({ ...prev, data: '' }))
+                    }
+                  }}
+                  format="dd/MM/yyyy"
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      name: "data"
+                    }
+                  }}
                 />
               </Grid>
 

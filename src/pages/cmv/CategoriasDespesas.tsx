@@ -19,7 +19,11 @@ import {
   TablePagination,
   CircularProgress,
   Alert,
-  Snackbar
+  Snackbar,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -32,7 +36,7 @@ import { supabase } from '@/services/supabase'
 interface CategoriaDespesa {
   id: number
   nome: string
-  descricao: string
+  tipo: 'fixa' | 'diversa'
   created_at: string
   updated_at: string
 }
@@ -103,7 +107,7 @@ export default function CategoriasDespesas() {
           .from('categorias_despesas')
           .update({
             nome: currentCategoria.nome,
-            descricao: currentCategoria.descricao,
+            tipo: currentCategoria.tipo || 'fixa',
             updated_at: new Date().toISOString()
           })
           .eq('id', currentCategoria.id)
@@ -117,7 +121,7 @@ export default function CategoriasDespesas() {
           .insert([
             {
               nome: currentCategoria.nome,
-              descricao: currentCategoria.descricao,
+              tipo: currentCategoria.tipo || 'fixa',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             }
@@ -167,8 +171,7 @@ export default function CategoriasDespesas() {
 
   // Filtrar categorias pelo termo de busca
   const filteredCategorias = categorias.filter(categoria =>
-    categoria.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    categoria.descricao?.toLowerCase().includes(searchTerm.toLowerCase())
+    categoria.nome.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   // Paginação
@@ -221,7 +224,7 @@ export default function CategoriasDespesas() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Nome</TableCell>
-                    <TableCell>Descrição</TableCell>
+                    <TableCell>Tipo</TableCell>
                     <TableCell>Data de Criação</TableCell>
                     <TableCell align="right">Ações</TableCell>
                   </TableRow>
@@ -231,7 +234,7 @@ export default function CategoriasDespesas() {
                     paginatedCategorias.map((categoria) => (
                       <TableRow key={categoria.id} hover>
                         <TableCell>{categoria.nome}</TableCell>
-                        <TableCell>{categoria.descricao}</TableCell>
+                        <TableCell>{categoria.tipo === 'fixa' ? 'Fixa' : 'Diversa'}</TableCell>
                         <TableCell>
                           {new Date(categoria.created_at).toLocaleDateString('pt-BR')}
                         </TableCell>
@@ -297,18 +300,19 @@ export default function CategoriasDespesas() {
             required
             sx={{ mb: 2, mt: 1 }}
           />
-          <TextField
-            margin="dense"
-            name="descricao"
-            label="Descrição"
-            type="text"
-            fullWidth
-            variant="outlined"
-            value={currentCategoria.descricao || ''}
-            onChange={handleInputChange}
-            multiline
-            rows={3}
-          />
+          <FormControl fullWidth margin="dense" required>
+            <InputLabel id="tipo-label">Tipo de Categoria</InputLabel>
+            <Select
+              labelId="tipo-label"
+              name="tipo"
+              value={currentCategoria.tipo || 'fixa'}
+              label="Tipo de Categoria"
+              onChange={(e) => setCurrentCategoria(prev => ({ ...prev, tipo: e.target.value as 'fixa' | 'diversa' }))}
+            >
+              <MenuItem value="fixa">Fixa</MenuItem>
+              <MenuItem value="diversa">Diversa</MenuItem>
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancelar</Button>

@@ -19,20 +19,21 @@ import {
   TableRow,
   Paper,
   Chip,
-
   Alert,
   CircularProgress,
-  IconButton
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
   Edit as EditIcon,
-  Save as SaveIcon,
-  Cancel as CancelIcon,
-  PictureAsPdf as PdfIcon
+
+  PictureAsPdf as PdfIcon,
+  Add as AddIcon,
+  Remove as RemoveIcon
 } from '@mui/icons-material';
 import { supabase } from '@/services/supabase'
-import { getDiaSemana } from '@/utils/dateUtils';
+import { getDiaSemana, formatarData } from '@/utils/dateUtils';
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -62,6 +63,7 @@ interface Agendamento {
 }
 
 interface FormaPagamento {
+  id: string;
   forma_pagamento: string;
   valor: string;
 }
@@ -110,8 +112,6 @@ const Financeiro: React.FC = () => {
   const [datas, setDatas] = useState<DataDisponivel[]>([]);
   const [datasFiltradasPorCidade, setDatasFiltradasPorCidade] = useState<DataDisponivel[]>([]);
   const [registrosFinanceiros, setRegistrosFinanceiros] = useState<RegistroFinanceiro[]>([]);
-
-
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [estatisticas, setEstatisticas] = useState<Estatisticas>({
@@ -134,7 +134,6 @@ const Financeiro: React.FC = () => {
     totalCartao: 0,
     totalPix: 0
   });
-  const [pagamentosDivididos, setPagamentosDivididos] = useState<Record<string, FormaPagamento[]>>({});
 
   // Carregar cidades e datas disponíveis
   useEffect(() => {
@@ -222,12 +221,14 @@ const Financeiro: React.FC = () => {
       
       // Buscar agendamentos da filial e data selecionadas
       const dataFormatada = dataObj.data;
+      const filialSelecionada = filiais.find(f => f.id === cidadeSelecionada);
+      const nomeFilial = filialSelecionada?.nome || '';
+      
       const { data: agendamentosFilial, error: agendamentosError } = await supabase
         .from('agendamentos')
         .select('id')
-        .eq('filial_id', parseInt(cidadeSelecionada))
-        .gte('data_hora', dataFormatada)
-        .lt('data_hora', dataFormatada + ' 23:59:59');
+        .eq('cidade', nomeFilial)
+        .eq('data', dataFormatada);
 
       if (agendamentosError) {
         console.error('Erro ao buscar agendamentos:', agendamentosError);
@@ -236,6 +237,11 @@ const Financeiro: React.FC = () => {
       }
 
       const agendamentoIds = agendamentosFilial?.map(a => a.id) || [];
+      console.log('🔍 Debug Financeiro:');
+      console.log('- Filial selecionada:', nomeFilial);
+      console.log('- Data selecionada:', dataFormatada);
+      console.log('- Agendamentos encontrados:', agendamentosFilial);
+      console.log('- IDs dos agendamentos:', agendamentoIds);
       
       // Buscar registros financeiros dos agendamentos encontrados
       const { data: registrosData, error: registrosError } = agendamentoIds.length > 0 
@@ -251,28 +257,13 @@ const Financeiro: React.FC = () => {
 
       const registros: RegistroFinanceiro[] = registrosData?.map(registro => ({
         ...registro,
-        editando: false
+        editando: false,
+        formasPagamento: registro.formasPagamento || [{
+          id: `fp_${registro.id}_1`,
+          forma_pagamento: registro.forma_pagamento || '',
+          valor: registro.valor || ''
+        }]
       })) || [];
-      
-      setRegistrosFinanceiros(registros);
-      
-      // Inicializar pagamentos divididos
-      const pagamentosTemp: Record<string, FormaPagamento[]> = {};
-      registros.forEach(registro => {
-        if (registro.formasPagamento && Array.isArray(registro.formasPagamento)) {
-          pagamentosTemp[registro.id] = registro.formasPagamento;
-        } else {
-          pagamentosTemp[registro.id] = [{
-            forma_pagamento: registro.forma_pagamento || '',
-            valor: registro.valor || ''
-          }];
-        }
-      });
-      
-      setPagamentosDivididos(prev => ({
-        ...prev,
-        ...pagamentosTemp
-      }));
       
       // Buscar agendamentos completos para processamento
       const { data: agendamentosData, error: agendamentosCompletosError } = agendamentoIds.length > 0
@@ -315,14 +306,17 @@ const Financeiro: React.FC = () => {
             observacoes: '',
             data_pagamento: null,
             novo: true,
-            editando: true
+            editando: true,
+            formasPagamento: [{
+              id: `fp_${novoRegistroId}_1`,
+              forma_pagamento: '',
+              valor: agendamento.valor || ''
+            }]
           };
 
           registrosDeAgendamentos.push(novoRegistro);
-          pagamentosTemp[novoRegistroId] = [{ forma_pagamento: '', valor: agendamento.valor || '' }];
         }
       });
-
 
       setRegistrosFinanceiros(registrosDeAgendamentos);
       
@@ -489,7 +483,6 @@ const Financeiro: React.FC = () => {
     setDataSelecionada('');
     setDiaSemana('');
     setRegistrosFinanceiros([]);
-
   };
 
   const handleChangeData = (event: any) => {
@@ -505,7 +498,6 @@ const Financeiro: React.FC = () => {
     } else {
       setDiaSemana('');
       setRegistrosFinanceiros([]);
-
     }
   };
 
@@ -525,55 +517,78 @@ const Financeiro: React.FC = () => {
     });
   };
 
-  const salvarRegistro = async (registro: RegistroFinanceiro) => {
-    try {
-      if (registro.novo) {
-        // Criar novo registro
-        const { error } = await supabase
-          .from('registros_financeiros')
-          .insert({
-            agendamento_id: registro.agendamento_id,
-            cliente: registro.cliente,
-            valor: registro.valor,
-            tipo: registro.tipo,
-            forma_pagamento: registro.forma_pagamento,
-            situacao: registro.situacao,
-            observacoes: registro.observacoes
+  // Funções para gerenciar formas de pagamento
+  const adicionarFormaPagamento = (registroId: string) => {
+    setRegistrosFinanceiros(prev => {
+      return prev.map(registro => {
+        if (registro.id === registroId) {
+          const novasFormas = [...(registro.formasPagamento || [])];
+          const novoId = `fp_${registroId}_${Date.now()}`;
+          novasFormas.push({
+            id: novoId,
+            forma_pagamento: '',
+            valor: ''
           });
-
-        if (error) {
-          console.error('Erro ao criar registro:', error);
-          setError('Erro ao salvar registro.');
-          return;
+          return { ...registro, formasPagamento: novasFormas };
         }
-      } else {
-        // Atualizar registro existente
-        const { error } = await supabase
-          .from('registros_financeiros')
-          .update({
-            cliente: registro.cliente,
-            valor: registro.valor,
-            tipo: registro.tipo,
-            forma_pagamento: registro.forma_pagamento,
-            situacao: registro.situacao,
-            observacoes: registro.observacoes
-          })
-          .eq('id', registro.id);
-
-        if (error) {
-          console.error('Erro ao atualizar registro:', error);
-          setError('Erro ao atualizar registro.');
-          return;
-        }
-      }
-
-      // Recarregar dados
-      buscarDados();
-    } catch (error) {
-      console.error('Erro ao salvar registro:', error);
-      setError('Erro ao salvar registro.');
-    }
+        return registro;
+      });
+    });
   };
+
+  const removerFormaPagamento = (registroId: string, formaId: string) => {
+    setRegistrosFinanceiros(prev => {
+      return prev.map(registro => {
+        if (registro.id === registroId) {
+          const novasFormas = (registro.formasPagamento || []).filter(fp => fp.id !== formaId);
+          if (novasFormas.length === 0) {
+            novasFormas.push({
+              id: `fp_${registroId}_1`,
+              forma_pagamento: '',
+              valor: ''
+            });
+          }
+          return { ...registro, formasPagamento: novasFormas };
+        }
+        return registro;
+      });
+    });
+  };
+
+  const handleChangeFormaPagamento = (registroId: string, formaId: string, campo: string, valor: string) => {
+    setRegistrosFinanceiros(prev => {
+      return prev.map(registro => {
+        if (registro.id === registroId) {
+          const formasAtualizadas = (registro.formasPagamento || []).map(fp => {
+            if (fp.id === formaId) {
+              if (campo === 'valor') {
+                const valorLimpo = valor.replace(/[^\d,.]/g, '');
+                const valorFormatado = valorLimpo.replace(/\./g, ',').replace(/,/g, ',');
+                return { ...fp, [campo]: valorFormatado };
+              }
+              return { ...fp, [campo]: valor };
+            }
+            return fp;
+          });
+          
+          // Calcular valor total
+          const valorTotal = formasAtualizadas.reduce((total, fp) => {
+            const valor = parseFloat(fp.valor.replace(',', '.')) || 0;
+            return total + valor;
+          }, 0);
+          
+          return { 
+            ...registro, 
+            formasPagamento: formasAtualizadas,
+            valor: valorTotal.toFixed(2).replace('.', ',')
+          };
+        }
+        return registro;
+      });
+    });
+  };
+
+
 
   const excluirRegistro = async (id: string) => {
     try {
@@ -642,9 +657,34 @@ const Financeiro: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Módulo Financeiro
+    <Box sx={{ 
+      p: 3, 
+      height: '80vh', 
+      overflowY: 'auto',
+      backgroundColor: '#f5f5f5',
+      '&::-webkit-scrollbar': {
+        width: '8px',
+      },
+      '&::-webkit-scrollbar-track': {
+        background: '#f1f1f1',
+        borderRadius: '4px',
+      },
+      '&::-webkit-scrollbar-thumb': {
+        background: '#888',
+        borderRadius: '4px',
+        '&:hover': {
+          background: '#555',
+        },
+      },
+    }}>
+      <Typography variant="h3" gutterBottom sx={{ 
+        fontWeight: 'bold', 
+        color: '#1976d2',
+        textAlign: 'center',
+        mb: 4,
+        textShadow: '1px 1px 2px rgba(0,0,0,0.1)'
+      }}>
+        Registros Financeiros - {diaSemana}
       </Typography>
 
       {error && (
@@ -692,7 +732,7 @@ const Financeiro: React.FC = () => {
                   </MenuItem>
                   {datasFiltradasPorCidade.map((data) => (
                     <MenuItem key={data.id} value={data.id}>
-                      {data.data} {data.dia_semana && `(${data.dia_semana})`}
+                      {formatarData(data.data)} {data.dia_semana && `(${data.dia_semana})`}
                     </MenuItem>
                   ))}
                 </Select>
@@ -807,165 +847,342 @@ const Financeiro: React.FC = () => {
                 Nenhum registro encontrado. Selecione uma filial e data para visualizar os registros.
               </Typography>
             ) : (
-              <TableContainer component={Paper}>
-                <Table>
+              <TableContainer component={Paper} sx={{ 
+                maxWidth: '100%', 
+                overflowX: 'auto',
+                '&::-webkit-scrollbar': {
+                  height: '8px',
+                },
+                '&::-webkit-scrollbar-track': {
+                  background: '#f1f1f1',
+                  borderRadius: '4px',
+                },
+                '&::-webkit-scrollbar-thumb': {
+                  background: '#888',
+                  borderRadius: '4px',
+                  '&:hover': {
+                    background: '#555',
+                  },
+                },
+              }}>
+                <Table sx={{ minWidth: 800 }}>
                   <TableHead>
-                    <TableRow>
-                      <TableCell>Cliente</TableCell>
-                      <TableCell>Valor</TableCell>
-                      <TableCell>Tipo</TableCell>
-                      <TableCell>Forma Pagamento</TableCell>
-                      <TableCell>Situação</TableCell>
-                      <TableCell>Observações</TableCell>
-                      <TableCell>Ações</TableCell>
+                    <TableRow sx={{ backgroundColor: '#f8f9fa' }}>
+                      <TableCell sx={{ minWidth: 140, fontWeight: 'bold', fontSize: '0.875rem' }}>Cliente</TableCell>
+                      <TableCell sx={{ minWidth: 100, fontWeight: 'bold', fontSize: '0.875rem' }}>R$</TableCell>
+                      <TableCell sx={{ minWidth: 120, fontWeight: 'bold', fontSize: '0.875rem' }}>Tipo</TableCell>
+                      <TableCell sx={{ minWidth: 180, fontWeight: 'bold', fontSize: '0.875rem' }}>Forma de Pagamento</TableCell>
+                      <TableCell sx={{ minWidth: 110, fontWeight: 'bold', fontSize: '0.875rem' }}>Situação</TableCell>
+                      <TableCell sx={{ minWidth: 130, fontWeight: 'bold', fontSize: '0.875rem' }}>Observações</TableCell>
+                      <TableCell sx={{ minWidth: 110, fontWeight: 'bold', fontSize: '0.875rem' }}>Ações</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {registrosFinanceiros.map((registro) => (
-                      <TableRow key={registro.id}>
-                        <TableCell>
+                      <TableRow key={registro.id} sx={{ '&:hover': { backgroundColor: '#f8f9fa' } }}>
+                        <TableCell sx={{ minWidth: 140, py: 0.5, pr: 1 }}>
                           {registro.editando ? (
                             <TextField
                               value={registro.cliente}
                               onChange={(e) => handleChangeRegistro(registro.id, 'cliente', e.target.value)}
                               size="small"
                               fullWidth
+                              variant="outlined"
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  backgroundColor: '#fff',
+                                  height: '28px'
+                                }
+                              }}
                             />
                           ) : (
-                            registro.cliente
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {registro.cliente}
+                            </Typography>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ minWidth: 100, py: 0.5, pr: 1 }}>
                           {registro.editando ? (
                             <TextField
                               value={registro.valor}
                               onChange={(e) => handleChangeRegistro(registro.id, 'valor', e.target.value)}
                               size="small"
                               fullWidth
+                              variant="outlined"
+                              InputProps={{
+                                startAdornment: <span style={{ color: '#666', marginRight: '4px' }}>R$</span>,
+                              }}
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  backgroundColor: '#fff',
+                                  height: '28px'
+                                }
+                              }}
                             />
                           ) : (
-                            registro.valor
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#1976d2' }}>
+                              R$ {registro.valor}
+                            </Typography>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ minWidth: 120, py: 0.5, pr: 1 }}>
                           {registro.editando ? (
-                            <Select
-                              value={registro.tipo}
-                              onChange={(e) => handleChangeRegistro(registro.id, 'tipo', e.target.value)}
-                              size="small"
-                              fullWidth
-                            >
-                              <MenuItem value="particular">Particular</MenuItem>
-                              <MenuItem value="convenio">Convênio</MenuItem>
-                              <MenuItem value="campanha">Campanha</MenuItem>
-                              <MenuItem value="exames">Exames</MenuItem>
-                              <MenuItem value="revisao">Revisão</MenuItem>
-                            </Select>
+                            <FormControl fullWidth size="small">
+                                <Select
+                                  value={registro.tipo}
+                                  onChange={(e) => handleChangeRegistro(registro.id, 'tipo', e.target.value)}
+                                  size="small"
+                                  fullWidth
+                                  variant="outlined"
+                                  sx={{
+                                    backgroundColor: '#fff',
+                                    height: '28px'
+                                  }}
+                                >
+                                  <MenuItem value="particular">Particular</MenuItem>
+                                  <MenuItem value="convenio">Convênio</MenuItem>
+                                  <MenuItem value="campanha">Campanha</MenuItem>
+                                  <MenuItem value="exames">Exames</MenuItem>
+                                  <MenuItem value="revisao">Revisão</MenuItem>
+                                </Select>
+                              </FormControl>
+                            ) : (
+                              <Chip 
+                                label={registro.tipo} 
+                                size="small" 
+                                sx={{
+                                  backgroundColor: '#e3f2fd',
+                                  color: '#1976d2',
+                                  fontWeight: 500
+                                }}
+                              />
+                            )}
+                          </TableCell>
+                        <TableCell sx={{ minWidth: 180, py: 0.5, pr: 1 }}>
+                          {registro.editando ? (
+                            <Box sx={{ py: 0.3 }}>
+                              {(registro.formasPagamento || []).map((forma) => (
+                                <Box key={forma.id} sx={{ 
+                                  mb: 0.2, 
+                                  p: 0.8, 
+                                  border: '1px solid #e0e0e0', 
+                                  borderRadius: 1,
+                                  backgroundColor: '#fafafa'
+                                }}>
+                                  <Grid container spacing={0.3} alignItems="center">
+                                    <Grid item xs={5}>
+                                      <FormControl fullWidth size="small">
+                                        <Select
+                                          value={forma.forma_pagamento}
+                                          onChange={(e) => handleChangeFormaPagamento(registro.id, forma.id, 'forma_pagamento', e.target.value)}
+                                          size="small"
+                                          fullWidth
+                                          variant="outlined"
+                                          displayEmpty
+                                          sx={{
+                                            backgroundColor: '#fff',
+                                            height: '28px'
+                                          }}
+                                        >
+                                          <MenuItem value="">
+                                            <em>Selecione</em>
+                                          </MenuItem>
+                                          <MenuItem value="dinheiro">Dinheiro</MenuItem>
+                                          <MenuItem value="cartao">Cartão</MenuItem>
+                                          <MenuItem value="pix">PIX</MenuItem>
+                                        </Select>
+                                      </FormControl>
+                                    </Grid>
+                                    <Grid item xs={5}>
+                                      <TextField
+                                        value={forma.valor}
+                                        onChange={(e) => handleChangeFormaPagamento(registro.id, forma.id, 'valor', e.target.value)}
+                                        size="small"
+                                        fullWidth
+                                        variant="outlined"
+                                        placeholder="0,00"
+                                        InputProps={{
+                                          startAdornment: <span style={{ color: '#666', marginRight: '4px' }}>R$</span>,
+                                        }}
+                                        sx={{
+                                          '& .MuiOutlinedInput-root': {
+                                            backgroundColor: '#fff',
+                                            height: '28px'
+                                          }
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={2} sx={{ textAlign: 'center' }}>
+                                      <Tooltip title="Remover forma de pagamento">
+                                        <IconButton
+                                          size="small"
+                                          color="error"
+                                          onClick={() => removerFormaPagamento(registro.id, forma.id)}
+                                          disabled={(registro.formasPagamento || []).length <= 1}
+                                          sx={{
+                                            backgroundColor: '#ffebee',
+                                            '&:hover': {
+                                              backgroundColor: '#ffcdd2'
+                                            }
+                                          }}
+                                        >
+                                          <RemoveIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </Grid>
+                                  </Grid>
+                                </Box>
+                              ))}
+                              <Box sx={{ textAlign: 'center', mt: 0.3 }}>
+                                <Button
+                                  size="small"
+                                  startIcon={<AddIcon />}
+                                  onClick={() => adicionarFormaPagamento(registro.id)}
+                                  variant="outlined"
+                                  sx={{
+                                    borderColor: '#1976d2',
+                                    color: '#1976d2',
+                                    height: '24px',
+                                    fontSize: '0.7rem',
+                                    padding: '4px 6px',
+                                    whiteSpace: 'nowrap',
+                                    minWidth: 'auto',
+                                    '&:hover': {
+                                      borderColor: '#1565c0',
+                                      backgroundColor: '#e3f2fd'
+                                    }
+                                  }}
+                                >
+                                  Forma Pagamento
+                                </Button>
+                              </Box>
+                            </Box>
                           ) : (
-                            <Chip label={registro.tipo} size="small" />
+                            <Box sx={{ py: 0.3 }}>
+                              {(registro.formasPagamento || []).map((forma) => (
+                                <Box key={forma.id} sx={{ 
+                                  mb: 0.15, 
+                                  display: 'inline-block',
+                                  mr: 0.3
+                                }}>
+                                  <Chip 
+                                    label={`${forma.forma_pagamento}: R$ ${forma.valor}`} 
+                                    size="small" 
+                                    variant="outlined"
+                                    sx={{
+                                      borderColor: '#1976d2',
+                                      color: '#1976d2',
+                                      backgroundColor: '#e3f2fd'
+                                    }}
+                                  />
+                                </Box>
+                              ))}
+                            </Box>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ minWidth: 110, py: 0.5, pr: 1 }}>
                           {registro.editando ? (
-                            <Select
-                              value={registro.forma_pagamento || ''}
-                              onChange={(e) => handleChangeRegistro(registro.id, 'forma_pagamento', e.target.value)}
-                              size="small"
-                              fullWidth
-                            >
-                              <MenuItem value="dinheiro">Dinheiro</MenuItem>
-                              <MenuItem value="cartao">Cartão</MenuItem>
-                              <MenuItem value="pix">PIX</MenuItem>
-                            </Select>
-                          ) : (
-                            registro.forma_pagamento
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {registro.editando ? (
-                            <Select
-                              value={registro.situacao}
-                              onChange={(e) => handleChangeRegistro(registro.id, 'situacao', e.target.value)}
-                              size="small"
-                              fullWidth
-                            >
-                              <MenuItem value="pago">Pago</MenuItem>
-                              <MenuItem value="pendente">Pendente</MenuItem>
-                              <MenuItem value="cancelado">Cancelado</MenuItem>
-                            </Select>
-                          ) : (
-                            <Chip 
-                              label={registro.situacao} 
-                              size="small"
-                              color={registro.situacao === 'pago' ? 'success' : registro.situacao === 'pendente' ? 'warning' : 'error'}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {registro.editando ? (
-                            <TextField
-                              value={registro.observacoes}
-                              onChange={(e) => handleChangeRegistro(registro.id, 'observacoes', e.target.value)}
-                              size="small"
-                              fullWidth
-                              multiline
-                              rows={2}
-                            />
-                          ) : (
-                            registro.observacoes
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {registro.editando ? (
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              <IconButton
+                            <FormControl fullWidth size="small">
+                                <Select
+                                  value={registro.situacao}
+                                  onChange={(e) => handleChangeRegistro(registro.id, 'situacao', e.target.value)}
+                                  size="small"
+                                  fullWidth
+                                  variant="outlined"
+                                  sx={{
+                                    backgroundColor: '#fff',
+                                    height: '28px'
+                                  }}
+                                >
+                                  <MenuItem value="">
+                                    <em>Selecione</em>
+                                  </MenuItem>
+                                  <MenuItem value="caso_clinico">Caso Clínico</MenuItem>
+                                  <MenuItem value="efetivacao">Efetivação</MenuItem>
+                                  <MenuItem value="perda">Perda</MenuItem>
+                                </Select>
+                              </FormControl>
+                            ) : (
+                              <Chip 
+                                label={registro.situacao} 
                                 size="small"
-                                color="primary"
-                                onClick={() => salvarRegistro(registro)}
-                              >
-                                <SaveIcon />
-                              </IconButton>
-                              <IconButton
+                                sx={{
+                                  backgroundColor: '#e3f2fd',
+                                  color: '#1976d2',
+                                  fontWeight: 500,
+                                  textTransform: 'capitalize'
+                                }}
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ minWidth: 130, py: 0.5, pr: 1 }}>
+                            {registro.editando ? (
+                              <TextField
+                                value={registro.observacoes}
+                                onChange={(e) => handleChangeRegistro(registro.id, 'observacoes', e.target.value)}
                                 size="small"
-                                onClick={() => {
-                                  if (registro.novo) {
-                                    setRegistrosFinanceiros(prev => prev.filter(r => r.id !== registro.id));
-                                  } else {
+                                fullWidth
+                                variant="outlined"
+                                multiline
+                                rows={1}
+                                placeholder="Digite as observações..."
+                                sx={{
+                                  '& .MuiOutlinedInput-root': {
+                                    backgroundColor: '#fff'
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <Typography variant="body2" sx={{ 
+                                color: registro.observacoes ? '#333' : '#999',
+                                fontStyle: registro.observacoes ? 'normal' : 'italic'
+                              }}>
+                                {registro.observacoes || 'Sem observações'}
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ minWidth: 110, py: 0.5, pr: 1 }}>
+                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                              <Tooltip title="Editar">
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  onClick={() => {
                                     setRegistrosFinanceiros(prev => 
-                                      prev.map(r => r.id === registro.id ? { ...r, editando: false } : r)
+                                      prev.map(r => r.id === registro.id ? { ...r, editando: true } : r)
                                     );
-                                  }
-                                }}
-                              >
-                                <CancelIcon />
-                              </IconButton>
+                                  }}
+                                  sx={{
+                                    backgroundColor: '#e3f2fd',
+                                    '&:hover': {
+                                      backgroundColor: '#bbdefb'
+                                    }
+                                  }}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Excluir">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => {
+                                    if (window.confirm('Tem certeza que deseja excluir este registro?')) {
+                                      excluirRegistro(registro.id);
+                                    }
+                                  }}
+                                  sx={{
+                                    backgroundColor: '#ffebee',
+                                    '&:hover': {
+                                      backgroundColor: '#ffcdd2'
+                                    }
+                                  }}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
                             </Box>
-                          ) : (
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              <IconButton
-                                size="small"
-                                onClick={() => {
-                                  setRegistrosFinanceiros(prev => 
-                                    prev.map(r => r.id === registro.id ? { ...r, editando: true } : r)
-                                  );
-                                }}
-                              >
-                                <EditIcon />
-                              </IconButton>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => {
-                                  if (window.confirm('Tem certeza que deseja excluir este registro?')) {
-                                    excluirRegistro(registro.id);
-                                  }
-                                }}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Box>
-                          )}
-                        </TableCell>
+                          </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

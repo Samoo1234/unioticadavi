@@ -1,10 +1,10 @@
 // Definição das permissões do sistema
 export const PERMISSIONS = {
-  // Permissões para Cidades
-  CITIES_VIEW: 'cities:view',
-  CITIES_CREATE: 'cities:create',
-  CITIES_EDIT: 'cities:edit',
-  CITIES_DELETE: 'cities:delete',
+  // Permissões para Filiais
+  FILIAIS_VIEW: 'filiais:view',
+  FILIAIS_CREATE: 'filiais:create',
+  FILIAIS_EDIT: 'filiais:edit',
+  FILIAIS_DELETE: 'filiais:delete',
   
   // Permissões para Médicos
   DOCTORS_VIEW: 'doctors:view',

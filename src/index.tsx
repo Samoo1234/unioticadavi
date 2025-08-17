@@ -4,8 +4,8 @@ import { BrowserRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import { CssBaseline } from '@mui/material'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
-import { ptBR } from 'date-fns/locale'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import 'dayjs/locale/pt-br'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
@@ -14,9 +14,9 @@ import { AppProvider } from '@/contexts/AppContext'
 import { theme } from '@/themes/theme'
 import App from './App.tsx'
 
-// Configuração global para o date-fns
-import { setDefaultOptions } from 'date-fns'
-setDefaultOptions({ locale: ptBR })
+// Configuração global para o dayjs
+import dayjs from 'dayjs'
+dayjs.locale('pt-br')
 
 const container = document.getElementById('root')
 if (!container) {
@@ -26,9 +26,9 @@ if (!container) {
 const root = createRoot(container)
 
 root.render(
-  <BrowserRouter>
+  <BrowserRouter basename="/">
     <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
         <CssBaseline />
         <AuthProvider>
           <AppProvider>

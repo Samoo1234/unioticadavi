@@ -310,9 +310,11 @@ export function Layout({ children }: LayoutProps) {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
           }),
+          overflow: 'auto',
+          height: '100vh',
+          paddingTop: '88px', // AppBar height + padding
         }}
       >
-        <Toolbar /> {/* Spacer for AppBar */}
         {children}
       </Box>
     </Box>

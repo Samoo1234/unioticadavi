@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react'
-import { Filial, Cidade } from '@/types/database'
+import { Filial } from '@/types/database'
 
 // Tipos para o estado da aplicação
 interface AppState {
   filialSelecionada: Filial | null
   filiais: Filial[]
-  cidades: Cidade[]
   sidebarOpen: boolean
   theme: 'light' | 'dark'
   notifications: Notification[]
@@ -24,7 +23,6 @@ interface Notification {
 type AppAction =
   | { type: 'SET_FILIAL_SELECIONADA'; payload: Filial | null }
   | { type: 'SET_FILIAIS'; payload: Filial[] }
-  | { type: 'SET_CIDADES'; payload: Cidade[] }
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_SIDEBAR_OPEN'; payload: boolean }
   | { type: 'SET_THEME'; payload: 'light' | 'dark' }
@@ -37,7 +35,6 @@ type AppAction =
 const initialState: AppState = {
   filialSelecionada: null,
   filiais: [],
-  cidades: [],
   sidebarOpen: true,
   theme: 'light',
   notifications: []
@@ -58,11 +55,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
         filiais: action.payload
       }
     
-    case 'SET_CIDADES':
-      return {
-        ...state,
-        cidades: action.payload
-      }
     
     case 'TOGGLE_SIDEBAR':
       return {
@@ -130,7 +122,6 @@ interface AppContextType {
   // Actions helpers
   setFilialSelecionada: (filial: Filial | null) => void
   setFiliais: (filiais: Filial[]) => void
-  setCidades: (cidades: Cidade[]) => void
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setTheme: (theme: 'light' | 'dark') => void
@@ -161,9 +152,6 @@ export function AppProvider({ children }: AppProviderProps) {
     dispatch({ type: 'SET_FILIAIS', payload: filiais })
   }
 
-  const setCidades = (cidades: Cidade[]) => {
-    dispatch({ type: 'SET_CIDADES', payload: cidades })
-  }
 
   const toggleSidebar = () => {
     dispatch({ type: 'TOGGLE_SIDEBAR' })
@@ -201,7 +189,6 @@ export function AppProvider({ children }: AppProviderProps) {
     dispatch,
     setFilialSelecionada,
     setFiliais,
-    setCidades,
     toggleSidebar,
     setSidebarOpen,
     setTheme,

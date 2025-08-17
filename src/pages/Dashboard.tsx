@@ -15,7 +15,6 @@ import {
 import {
   CalendarToday,
   People,
-
   TrendingUp,
   TrendingDown,
   LocalHospital,
@@ -40,7 +39,7 @@ import { supabase } from '@/services/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useApp } from '@/contexts/AppContext'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
-import { formatarData, getDataAtualISO } from '@/utils/dateUtils'
+import { getDataAtualISO } from '@/utils/dateUtils'
 
 
 // Registrar componentes do Chart.js
