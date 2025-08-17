@@ -15,7 +15,6 @@ export interface Database {
           nome: string
           endereco: string
           telefone: string | null
-          responsavel: string | null
           ativa: boolean
           created_at: string
           updated_at: string
@@ -25,7 +24,6 @@ export interface Database {
           nome: string
           endereco: string
           telefone?: string | null
-          responsavel?: string | null
           ativa?: boolean
           created_at?: string
           updated_at?: string
@@ -35,7 +33,6 @@ export interface Database {
           nome?: string
           endereco?: string
           telefone?: string | null
-          responsavel?: string | null
           ativa?: boolean
           created_at?: string
           updated_at?: string
