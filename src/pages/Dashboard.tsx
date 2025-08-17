@@ -38,7 +38,7 @@ import { Bar, Pie, Line } from 'react-chartjs-2'
 import { supabase } from '@/services/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useApp } from '@/contexts/AppContext'
-import { format, startOfMonth, endOfMonth } from 'date-fns'
+import { startOfMonth, endOfMonth } from 'date-fns'
 import { getDataAtualISO } from '@/utils/dateUtils'
 
 
@@ -216,8 +216,8 @@ export function Dashboard() {
       const { data: agendamentosMesData } = await supabase
         .from('agendamentos')
         .select('*')
-        .gte('data', format(inicioMes, 'yyyy-MM-dd'))
-        .lte('data', format(fimMes, 'yyyy-MM-dd'))
+        .gte('data', inicioMes.toISOString().split('T')[0])
+        .lte('data', fimMes.toISOString().split('T')[0])
 
       // Buscar filiais
       const { data: filiaisData } = await supabase
@@ -234,8 +234,8 @@ export function Dashboard() {
       const { data: titulosData } = await supabase
         .from('titulos')
         .select('*')
-        .gte('data_vencimento', format(inicioMes, 'yyyy-MM-dd'))
-        .lte('data_vencimento', format(fimMes, 'yyyy-MM-dd'))
+        .gte('data_vencimento', inicioMes.toISOString().split('T')[0])
+        .lte('data_vencimento', fimMes.toISOString().split('T')[0])
 
       // Calcular métricas de agendamentos
       const totalAgendamentos = agendamentosData?.length || 0

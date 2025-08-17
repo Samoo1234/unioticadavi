@@ -38,14 +38,16 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material'
 import { supabase } from '../../services/supabase'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 
 // Função utilitária para formatação de data
 const formatDateToBrazilian = (dateString: string) => {
   if (!dateString) return ''
   const date = new Date(dateString)
-  return format(date, 'dd/MM/yyyy', { locale: ptBR })
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  })
 }
 
 interface Titulo {

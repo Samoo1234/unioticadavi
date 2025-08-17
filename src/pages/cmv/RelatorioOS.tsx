@@ -239,7 +239,11 @@ const RelatorioOS: React.FC = () => {
 
   const formatDateToBrazilian = (dateString: string) => {
     const date = new Date(dateString + 'T00:00:00')
-    return date.toLocaleDateString('pt-BR')
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    })
   }
 
   const getNomeMedico = (medicoId?: number) => {

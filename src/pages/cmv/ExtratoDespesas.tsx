@@ -108,7 +108,11 @@ export default function ExtratoDespesas() {
         return dateString;
       }
       
-      return format(parsedDate, 'dd/MM/yyyy');
+      return parsedDate.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
     } catch (error) {
       console.error('Erro ao formatar data:', error);
       return dateString;
@@ -488,7 +492,13 @@ export default function ExtratoDespesas() {
     try {
       const doc = new jsPDF('landscape', 'mm', 'a4');
       const dataAtual = new Date();
-      const dataFormatada = format(dataAtual, "dd/MM/yyyy 'às' HH:mm");
+      const dataFormatada = dataAtual.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
       
       // Título do relatório
       doc.setFontSize(18);
@@ -497,7 +507,7 @@ export default function ExtratoDespesas() {
       // Subtítulo com o período
       doc.setFontSize(12);
       doc.text(
-        `Período: ${format(new Date(filtroPeriodo.inicio), 'dd/MM/yyyy')} a ${format(new Date(filtroPeriodo.fim), 'dd/MM/yyyy')}`,
+        `Período: ${new Date(filtroPeriodo.inicio).toLocaleDateString('pt-BR')} a ${new Date(filtroPeriodo.fim).toLocaleDateString('pt-BR')}`,
         149, 22, { align: 'center' }
       );
       
@@ -667,7 +677,9 @@ export default function ExtratoDespesas() {
       }
 
       // Salvar o PDF
-      doc.save(`Extrato_Despesas_${format(new Date(), 'dd-MM-yyyy_HH-mm')}.pdf`);
+      const agora = new Date();
+      const nomeArquivo = `Extrato_Despesas_${agora.toLocaleDateString('pt-BR').replace(/\//g, '-')}_${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }).replace(':', '-')}.pdf`;
+      doc.save(nomeArquivo);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       alert('Erro ao gerar PDF: ' + errorMessage);

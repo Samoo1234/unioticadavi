@@ -736,7 +736,7 @@ const Titulos: React.FC = () => {
                           setForm(prev => ({ ...prev, vencimento: '' }))
                         }
                       }}
-                      format="DD/MM/YYYY"
+                      format="dd/MM/yyyy"
                       slotProps={{
                         textField: {
                           fullWidth: true,
@@ -783,7 +783,7 @@ const Titulos: React.FC = () => {
                                 handleItemTituloChange(index, 'vencimento', '')
                               }
                             }}
-                            format="DD/MM/YYYY"
+                            format="dd/MM/yyyy"
                             slotProps={{
                               textField: {
                                 fullWidth: true,

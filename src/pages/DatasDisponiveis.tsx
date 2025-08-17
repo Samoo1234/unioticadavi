@@ -24,7 +24,7 @@ import {
 } from '@mui/material'
 import { Settings as SettingsIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material'
 import { supabase } from '@/services/supabase'
-import { formatarData, getDataAtualISO } from '@/utils/dateUtils'
+import { getDataAtualISO } from '@/utils/dateUtils'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'react-toastify'
@@ -558,7 +558,12 @@ export default function DatasDisponiveis() {
 
       if (existingData) {
         const filial = filiais.find(f => f.id === Number(formData.filial_id))
-         throw new Error(`Já existe uma data cadastrada para ${filial?.nome} em ${dataFormatada}`)
+        const dataFormatadaBR = new Date(dataFormatada + 'T00:00:00').toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        })
+        throw new Error(`Já existe uma data cadastrada para ${filial?.nome} em ${dataFormatadaBR}`)
       }
 
       // Gerar horários baseados na configuração da filial
@@ -753,7 +758,7 @@ export default function DatasDisponiveis() {
                       setFormData(prev => ({ ...prev, data: '' }))
                     }
                   }}
-                  format="dd/MM/yyyy"
+                  format="DD/MM/YYYY"
                   slotProps={{
                     textField: {
                       fullWidth: true,
@@ -800,7 +805,11 @@ export default function DatasDisponiveis() {
               return (
                 <TableRow key={date.id}>
                   <TableCell>{filial?.nome || 'Filial não encontrada'}</TableCell>
-                  <TableCell>{formatarData(date.data)}</TableCell>
+                  <TableCell>{new Date(date.data + 'T00:00:00').toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  })}</TableCell>
                   <TableCell>{date.medico_nome}</TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>

@@ -221,7 +221,11 @@ const HistoricoAgendamentos: React.FC = () => {
   const formatarData = (dataString: string) => {
     if (!dataString) return '';
     const data = new Date(dataString);
-    return data.toLocaleDateString('pt-BR');
+    return data.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
   };
 
   // Formatar horário
