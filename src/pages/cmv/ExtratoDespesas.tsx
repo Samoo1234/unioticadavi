@@ -35,7 +35,7 @@ import { supabase } from '../../services/supabase'
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title, Filler } from 'chart.js'
-import { Pie, Bar } from 'react-chartjs-2'
+import { Pie } from 'react-chartjs-2'
 
 // Registrar componentes do Chart.js
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title, Filler)
@@ -78,7 +78,6 @@ export default function ExtratoDespesas() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
-  const [filtroFormaPagamento, setFiltroFormaPagamento] = useState<string | null>(null)
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [filtroCategoria, setFiltroCategoria] = useState<number | null>(null)
@@ -129,8 +128,6 @@ export default function ExtratoDespesas() {
     const categoriaMatch = filtroCategoria !== null ? despesa.categoria_id === filtroCategoria : true;
     
     
-    // Filtro de forma de pagamento
-    const formaPagamentoMatch = filtroFormaPagamento ? despesa.forma_pagamento === filtroFormaPagamento : true;
     
     // Filtro de tipo de despesa
     const tipoMatch = filtroTipo !== 'todos' ? despesa.tipo === filtroTipo : true;
@@ -141,7 +138,7 @@ export default function ExtratoDespesas() {
     // Filtro de data removido - já aplicado na busca do banco
     const dataMatch = true;
     
-    return textMatch && categoriaMatch && formaPagamentoMatch && tipoMatch && filialMatch && dataMatch;
+    return textMatch && categoriaMatch && tipoMatch && filialMatch && dataMatch;
   };
 
   // Obter despesas filtradas
@@ -522,9 +519,6 @@ export default function ExtratoDespesas() {
         }
       }
       
-      if (filtroFormaPagamento) {
-        filtrosTexto += `Forma de Pagamento: ${filtroFormaPagamento}, `;
-      }
       
       
       // Remover a última vírgula e espaço se houver filtros
