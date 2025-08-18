@@ -65,7 +65,7 @@ export function Layout({ children }: LayoutProps) {
   const handleLogout = async () => {
     handleCloseUserMenu()
     await signOut()
-    navigate('/login')
+    navigate('/')
   }
 
   const handleProfile = () => {

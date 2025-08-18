@@ -517,7 +517,7 @@ export function Agendamentos() {
                   <MenuItem value="">Todas</MenuItem>
                   {availableDates.map(date => (
                     <MenuItem key={date} value={date}>
-                      {date}
+                      {date ? new Date(date + 'T00:00:00').toLocaleDateString('pt-BR') : date}
                     </MenuItem>
                   ))}
                 </Select>
@@ -545,18 +545,18 @@ export function Agendamentos() {
       {/* Tabela de agendamentos */}
       <Card>
         <CardContent>
-          <TableContainer component={Paper}>
-            <Table stickyHeader>
+          <TableContainer component={Paper} sx={{ width: '100%', overflow: 'auto' }}>
+            <Table stickyHeader sx={{ minWidth: 1200 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell>Nome</TableCell>
-                  <TableCell>Cidade</TableCell>
-                  <TableCell>Data</TableCell>
-                  <TableCell>Horário</TableCell>
-                  <TableCell>Telefone</TableCell>
-                  <TableCell>Observações</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="center">Ações</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 150 }}>Nome</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 120 }}>Cidade</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 100 }}>Data</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 80 }}>Horário</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 130 }}>Telefone</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 150, maxWidth: 200 }}>Observações</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 120 }}>Status</TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap', minWidth: 100 }}>Ações</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -574,18 +574,24 @@ export function Agendamentos() {
                 ) : (
                   sortedAppointments.map((appointment) => (
                     <TableRow key={appointment.id} hover>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="medium">
+                      <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>
+                        <Typography variant="body2" fontWeight="medium" noWrap>
                           {appointment.nome}
                         </Typography>
                       </TableCell>
-                      <TableCell>{appointment.cidade}</TableCell>
-                      <TableCell>{appointment.data}</TableCell>
-                      <TableCell>{appointment.horario}</TableCell>
-                      <TableCell>{appointment.telefone}</TableCell>
-                      <TableCell>{appointment.observacoes || appointment.informacoes || '-'}</TableCell>
-                      <TableCell>
-                        <FormControl fullWidth size="small">
+                      <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>
+                        {appointment.cidade}
+                      </TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        {appointment.data ? new Date(appointment.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                      </TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{appointment.horario}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{appointment.telefone}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
+                        {appointment.observacoes || appointment.informacoes || '-'}
+                      </TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        <FormControl size="small" sx={{ minWidth: 100 }}>
                           <Select
                             value={appointment.status}
                             onChange={(e) => handleStatusChange(appointment.id, e.target.value as 'pendente' | 'confirmado' | 'cancelado')}
@@ -606,7 +612,7 @@ export function Agendamentos() {
                           </Select>
                         </FormControl>
                       </TableCell>
-                      <TableCell align="center">
+                      <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                         <Tooltip title="Editar">
                           <IconButton
                             size="small"
