@@ -25,7 +25,16 @@ import {
   Settings as SettingsIcon,
   ExpandLess,
   ExpandMore,
-  Business as BusinessIcon
+  Business as BusinessIcon,
+  Category as CategoryIcon,
+  AccountBalance as AccountBalanceIcon,
+  Description as DocumentIcon,
+  CreditCard as CreditCardIcon,
+  ShoppingCart as ShoppingCartIcon,
+  Assessment as AssessmentIcon,
+  MonetizationOn as MonetizationOnIcon,
+  RequestQuote as RequestQuoteIcon,
+  PieChart as PieChartIcon
 } from '@mui/icons-material'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
@@ -117,7 +126,7 @@ const menuItems: MenuItem[] = [
       {
         id: 'tipos-fornecedores',
         label: 'Tipos de Fornecedores',
-        icon: <BusinessIcon />,
+        icon: <CategoryIcon />,
         path: '/cmv/tipos-fornecedores'
       },
       {
@@ -129,49 +138,49 @@ const menuItems: MenuItem[] = [
       {
         id: 'titulos',
         label: 'Títulos',
-        icon: <ReceiptIcon />,
+        icon: <RequestQuoteIcon />,
         path: '/cmv/titulos'
       },
       {
         id: 'extrato-titulos',
         label: 'Extrato de Títulos',
-        icon: <ReceiptIcon />,
+        icon: <DocumentIcon />,
         path: '/cmv/extrato-titulos'
       },
       {
         id: 'categorias-despesas',
         label: 'Categorias de Despesas',
-        icon: <ReceiptIcon />,
+        icon: <CategoryIcon />,
         path: '/cmv/categorias-despesas'
       },
       {
         id: 'despesas-fixas',
         label: 'Despesas Fixas',
-        icon: <ReceiptIcon />,
+        icon: <AccountBalanceIcon />,
         path: '/cmv/despesas-fixas'
       },
       {
         id: 'despesas-diversas',
         label: 'Despesas Diversas',
-        icon: <ReceiptIcon />,
+        icon: <ShoppingCartIcon />,
         path: '/cmv/despesas-diversas'
       },
       {
         id: 'extrato-despesas',
         label: 'Extrato Despesas',
-        icon: <ReceiptIcon />,
+        icon: <AssessmentIcon />,
         path: '/cmv/extrato-despesas'
       },
       {
         id: 'custo-os',
         label: 'Custo de OS',
-        icon: <OrderIcon />,
+        icon: <MonetizationOnIcon />,
         path: '/cmv/custo-os'
       },
       {
         id: 'relatorio-os',
         label: 'Relatório de OS',
-        icon: <ReportIcon />,
+        icon: <PieChartIcon />,
         path: '/cmv/relatorio-os'
       }
     ]

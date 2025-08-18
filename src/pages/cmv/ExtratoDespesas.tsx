@@ -255,7 +255,7 @@ export default function ExtratoDespesas() {
       let categoriasData: Array<{id: number, nome: string}> = [];
       if (categoriaIds.length > 0) {
         const { data, error } = await supabase
-          .from('categorias_despesas')
+          .from('categorias')
           .select('id, nome')
           .in('id', categoriaIds)
         
@@ -309,7 +309,7 @@ export default function ExtratoDespesas() {
       let categoriasDiversasData: Array<{id: number, nome: string}> = [];
       if (categoriaIdsDiversas.length > 0) {
         const { data, error } = await supabase
-          .from('categorias_despesas')
+          .from('categorias')
           .select('id, nome')
           .in('id', categoriaIdsDiversas)
         
@@ -375,7 +375,7 @@ export default function ExtratoDespesas() {
   const fetchCategorias = async () => {
     try {
       const { data, error } = await supabase
-        .from('categorias_despesas')
+        .from('categorias')
         .select('id, nome')
         .order('nome', { ascending: true })
 

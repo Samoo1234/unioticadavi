@@ -61,7 +61,7 @@ export default function CategoriasDespesas() {
     try {
       setLoading(true)
       const { data, error } = await supabase
-        .from('categorias_despesas')
+        .from('categorias')
         .select('*')
         .order('nome', { ascending: true })
 
@@ -104,7 +104,7 @@ export default function CategoriasDespesas() {
       if (currentCategoria.id) {
         // Atualizar categoria existente
         const { error } = await supabase
-          .from('categorias_despesas')
+          .from('categorias')
           .update({
             nome: currentCategoria.nome,
             tipo: currentCategoria.tipo || 'fixa',
@@ -117,7 +117,7 @@ export default function CategoriasDespesas() {
       } else {
         // Criar nova categoria
         const { error } = await supabase
-          .from('categorias_despesas')
+          .from('categorias')
           .insert([
             {
               nome: currentCategoria.nome,
@@ -143,7 +143,7 @@ export default function CategoriasDespesas() {
 
     try {
       const { error } = await supabase
-        .from('categorias_despesas')
+        .from('categorias')
         .delete()
         .eq('id', id)
 

@@ -85,6 +85,11 @@ const EmissaoTitulos: React.FC = () => {
   const [filiais, setFiliais] = useState<{ id: number, nome: string }[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [alert, setAlert] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'info' })
+
+  // Carregar dados automaticamente quando o componente montar
+  useEffect(() => {
+    carregarDados()
+  }, [])
   
   // Estados para paginação
   const [paginaAtual, setPaginaAtual] = useState(1)
@@ -339,20 +344,6 @@ const EmissaoTitulos: React.FC = () => {
   }
   
 
-  // Manipulador para mudança de filial
-  const handleFilialChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    let filialId = '';
-    
-    // Verificar se o valor não está vazio antes de tentar convertê-lo
-    if (e.target.value !== '') {
-      // Garantir que o valor seja um número válido
-      const parsedValue = parseInt(e.target.value, 10);
-      filialId = !isNaN(parsedValue) ? parsedValue : e.target.value;
-    }
-    
-    setFiltros({ ...filtros, filial_id: filialId });
-    aplicarFiltros({ ...filtros, filial_id: filialId }, filtroTipo);
-  };
 
   // Manipulador para filtros de texto/selects
   const handleFiltroChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -406,12 +397,14 @@ const EmissaoTitulos: React.FC = () => {
           }
           
           // Comparar por nome se tipo_id não existir OU comparar por ID se existir
-          const matchPorId = !isNaN(tituloTipoId) && !isNaN(tipoSelecionadoId) && tituloTipoId === tipoSelecionadoId
+          const matchPorId = tituloTipoId !== null && tipoSelecionadoId !== null && 
+                            !isNaN(tituloTipoId) && !isNaN(tipoSelecionadoId) && 
+                            tituloTipoId === tipoSelecionadoId
           const matchPorNome = titulo.tipo === filtrosAtuais.tipo
           const match = matchPorId || matchPorNome
           
           // Log para debug em casos específicos
-          if (titulo.id === resultado[0]?.id) {
+          if (resultado.length > 0 && titulo.id === resultado[0]?.id) {
             console.log('Avaliando título exemplo:', { 
               id: titulo.id, 
               tipo_id: titulo.tipo_id,
@@ -445,7 +438,7 @@ const EmissaoTitulos: React.FC = () => {
                       (titulo.fornecedor_id === undefined && titulo.fornecedor === filtrosAtuais.fornecedor)
           
           // Log para debug em casos específicos
-          if (titulo.id === resultado[0]?.id) {
+          if (resultado.length > 0 && titulo.id === resultado[0]?.id) {
             console.log('Avaliando título para fornecedor:', { 
               id: titulo.id, 
               fornecedor_id: titulo.fornecedor_id, 
@@ -474,7 +467,7 @@ const EmissaoTitulos: React.FC = () => {
                       (titulo.filial_id === undefined && titulo.filial === filtrosAtuais.filial)
           
           // Log para debug em casos específicos
-          if (titulo.id === resultado[0]?.id) {
+          if (resultado.length > 0 && titulo.id === resultado[0]?.id) {
             console.log('Avaliando título para filial:', { 
               id: titulo.id, 
               filial_id: titulo.filial_id, 

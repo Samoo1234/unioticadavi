@@ -30,6 +30,8 @@ import {
   Tooltip,
   InputAdornment,
   FormHelperText,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material'
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -39,7 +41,6 @@ import { format, parseISO, isValid } from 'date-fns'
 import { 
   Add as AddIcon, 
   Edit as EditIcon, 
-  Refresh as RefreshIcon, 
   Clear as ClearIcon, 
   Block as BlockIcon, 
   Delete as DeleteIcon, 
@@ -64,7 +65,7 @@ interface DespesaFixaCompleta {
   id: number
   filial_id: number
   filial_nome: string
-  categoria_id?: number
+  categoria_id: number | null
   categoria_nome?: string
   nome?: string
   valor: number
@@ -155,12 +156,20 @@ export default function DespesasFixas() {
 
       interface DespesaSupabase {
         id: number;
-        nome: string;
+        filial_id: number;
+        categoria_id: number | null;
+        nome?: string;
         valor: number;
-        categoria_id: number;
-        forma_pagamento: string;
+        periodicidade: 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
+        dia_vencimento: number;
+        data_vencimento?: string;
         observacoes?: string;
-        filial_id?: number;
+        status: 'ativo' | 'inativo';
+        created_at: string;
+        updated_at: string;
+        data_pagamento?: string;
+        forma_pagamento?: string;
+        comprovante_url?: string;
         filial?: { nome: string };
         categoria?: { nome: string };
       }
@@ -235,11 +244,6 @@ export default function DespesasFixas() {
     return labels[periodicidade as keyof typeof labels] || periodicidade
   }
 
-  const arredondarDuasCasas = (valor: string | number) => {
-    const num = typeof valor === 'string' ? parseFloat(valor.replace(',', '.')) : valor
-    if (isNaN(num)) return ''
-    return (Math.round(num * 100) / 100).toFixed(2)
-  }
 
   const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let valor = e.target.value.replace(',', '.')
@@ -692,6 +696,16 @@ export default function DespesasFixas() {
               value={filtros.data_final}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFiltros({ ...filtros, data_final: e.target.value })}
               InputLabelProps={{ shrink: true }}
+            />
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={showInactivas}
+                  onChange={(e) => setShowInactivas(e.target.checked)}
+                />
+              }
+              label="Mostrar inativas"
             />
 
             <Button

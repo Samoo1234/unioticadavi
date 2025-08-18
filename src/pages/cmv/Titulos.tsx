@@ -71,7 +71,7 @@ interface TituloCompleto extends Omit<Titulo, 'valor' | 'fornecedor_id' | 'filia
 const Titulos: React.FC = () => {
   const [titulos, setTitulos] = useState<TituloCompleto[]>([]);
   const [filiais, setFiliais] = useState<{id: number, nome: string}[]>([]);
-  const [fornecedores, setFornecedores] = useState<{id: number, nome: string, tipo: string}[]>([]);
+  const [fornecedores, setFornecedores] = useState<{id: number, nome: string, tipo: string, tipo_id: number}[]>([]);
   const [form, setForm] = useState<Partial<FormTitulo>>({});
   const [editId, setEditId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -736,12 +736,13 @@ const Titulos: React.FC = () => {
                           setForm(prev => ({ ...prev, vencimento: '' }))
                         }
                       }}
-                      format="dd/MM/yyyy"
+                      format="DD/MM/YYYY"
                       slotProps={{
                         textField: {
                           fullWidth: true,
                           name: "vencimento",
-                          required: true
+                          required: true,
+                          placeholder: "DD/MM/AAAA"
                         }
                       }}
                     />
@@ -783,11 +784,12 @@ const Titulos: React.FC = () => {
                                 handleItemTituloChange(index, 'vencimento', '')
                               }
                             }}
-                            format="dd/MM/yyyy"
+                            format="DD/MM/YYYY"
                             slotProps={{
                               textField: {
                                 fullWidth: true,
-                                required: true
+                                required: true,
+                                placeholder: "DD/MM/AAAA"
                               }
                             }}
                           />

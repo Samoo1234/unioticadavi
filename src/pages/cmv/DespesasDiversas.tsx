@@ -155,7 +155,7 @@ export default function DespesasDiversas() {
   const loadCategorias = async () => {
     try {
       const { data, error } = await supabase
-        .from('categorias_despesas')
+        .from('categorias')
         .select('id, nome')
         .eq('tipo', 'diversa')
         .order('nome')

@@ -29,7 +29,7 @@ interface CustoOS {
   custo_armacoes: number
   custo_mkt: number
   outros_custos: number
-  medico_id?: number
+  medico_id?: string
   numero_tco?: string
   created_at?: string
   updated_at?: string
@@ -46,7 +46,7 @@ interface FormCustoOS {
   custoMkt: string
   outrosCustos: string
   medico: string
-  medico_id?: number
+  medico_id?: string
   numeroTco: string
 }
 
@@ -56,7 +56,7 @@ interface Filial {
 }
 
 interface Medico {
-  id: number
+  id: string
   nome: string
 }
 
@@ -318,7 +318,7 @@ const CustoOS: React.FC = () => {
     return filial ? filial.nome : 'Filial não encontrada'
   }
 
-  const getNomeMedico = (medicoId?: number) => {
+  const getNomeMedico = (medicoId?: string) => {
     if (!medicoId) return 'Não informado'
     const medico = medicos.find(m => m.id === medicoId)
     return medico ? medico.nome : 'Médico não encontrado'
@@ -458,8 +458,8 @@ const CustoOS: React.FC = () => {
                   value={form.medico_id || ''}
                   onChange={e => setForm({
                     ...form,
-                    medico_id: Number(e.target.value) || undefined,
-                    medico: medicos.find(m => m.id === Number(e.target.value))?.nome || ''
+                    medico_id: e.target.value || undefined,
+                    medico: medicos.find(m => m.id === e.target.value)?.nome || ''
                   })}
                   fullWidth
                   disabled={isLoading || medicos.length === 0}

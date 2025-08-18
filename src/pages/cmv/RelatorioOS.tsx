@@ -21,26 +21,6 @@ import {
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import { supabase } from '../../services/supabase'
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
-
-// Declaração para o plugin autotable
-interface AutoTableOptions {
-  head?: string[][];
-  body?: (string | number)[][];
-  startY?: number;
-  margin?: { top?: number; right?: number; bottom?: number; left?: number };
-  styles?: { fontSize?: number; cellPadding?: number };
-  headStyles?: { fillColor?: number[]; textColor?: number[] };
-  columnStyles?: { [key: number]: { cellWidth?: number; halign?: string } };
-  theme?: string;
-  [key: string]: unknown;
-}
-
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: AutoTableOptions) => jsPDF
-  }
-}
 
 interface Filial {
   id: number
@@ -48,7 +28,7 @@ interface Filial {
 }
 
 interface Medico {
-  id: number
+  id: string
   nome: string
 }
 
@@ -61,7 +41,7 @@ interface CustoOS {
   custo_armacoes: number
   custo_mkt: number
   outros_custos: number
-  medico_id?: number
+  medico_id?: string
   numero_tco?: string
 }
 
@@ -75,7 +55,7 @@ interface OS {
   custoArmacoes: number
   custoMkt: number
   outrosCustos: number
-  medico_id?: number
+  medico_id?: string
   numero_tco?: string
   nomeMedico?: string
 }
@@ -246,7 +226,7 @@ const RelatorioOS: React.FC = () => {
     })
   }
 
-  const getNomeMedico = (medicoId?: number) => {
+  const getNomeMedico = (medicoId?: string) => {
     if (!medicoId) return 'Não informado'
     const medico = medicos.find(m => m.id === medicoId)
     return medico ? medico.nome : 'Médico não encontrado'
@@ -270,6 +250,68 @@ const RelatorioOS: React.FC = () => {
     setFiltros({ ...filtros, [e.target.name]: e.target.value })
   }
 
+  // Função para desenhar tabela manualmente
+  const drawTable = (doc: jsPDF, headers: string[], data: string[][], startY: number, title?: string) => {
+    let yPos = startY
+    const pageWidth = doc.internal.pageSize.width
+    const margin = 14
+    const tableWidth = pageWidth - (margin * 2)
+    const colWidth = tableWidth / headers.length
+    const rowHeight = 8
+    
+    // Título da tabela se fornecido
+    if (title) {
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.text(title, margin, yPos)
+      yPos += 10
+    }
+    
+    // Cabeçalho
+    doc.setFillColor(41, 128, 185)
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    
+    doc.rect(margin, yPos, tableWidth, rowHeight, 'F')
+    
+    headers.forEach((header, index) => {
+      const xPos = margin + (index * colWidth) + 2
+      doc.text(header, xPos, yPos + 5)
+    })
+    
+    yPos += rowHeight
+    
+    // Dados
+    doc.setTextColor(0, 0, 0)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    
+    data.forEach((row, rowIndex) => {
+      // Alternar cor de fundo
+      if (rowIndex % 2 === 0) {
+        doc.setFillColor(245, 245, 245)
+        doc.rect(margin, yPos, tableWidth, rowHeight, 'F')
+      }
+      
+      row.forEach((cell, colIndex) => {
+        const xPos = margin + (colIndex * colWidth) + 2
+        const cellText = cell.length > 15 ? cell.substring(0, 12) + '...' : cell
+        doc.text(cellText, xPos, yPos + 5)
+      })
+      
+      yPos += rowHeight
+      
+      // Verificar se precisa de nova página
+      if (yPos > doc.internal.pageSize.height - 30) {
+        doc.addPage()
+        yPos = 20
+      }
+    })
+    
+    return yPos + 10
+  }
+
   // Função para gerar PDF
   const handleGerarPDF = () => {
     try {
@@ -277,37 +319,47 @@ const RelatorioOS: React.FC = () => {
       
       // Título
       doc.setFontSize(18)
+      doc.setFont('helvetica', 'bold')
       doc.text('Relatório de OS', 14, 22)
       
+      // Data de geração
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 14, 30)
+      
       // Filtros aplicados
-      let yPosition = 35
+      let yPosition = 45
       doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
       doc.text('Filtros Aplicados:', 14, yPosition)
-      yPosition += 7
+      yPosition += 8
+      
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
       
       if (filtros.filial) {
-        doc.text(`Filial: ${filtros.filial}`, 14, yPosition)
-        yPosition += 7
+        doc.text(`• Filial: ${filtros.filial}`, 20, yPosition)
+        yPosition += 6
       }
       
       if (filtros.dataInicial) {
-        doc.text(`Data Inicial: ${formatDateToBrazilian(filtros.dataInicial)}`, 14, yPosition)
-        yPosition += 7
+        doc.text(`• Data Inicial: ${formatDateToBrazilian(filtros.dataInicial)}`, 20, yPosition)
+        yPosition += 6
       }
       
       if (filtros.dataFinal) {
-        doc.text(`Data Final: ${formatDateToBrazilian(filtros.dataFinal)}`, 14, yPosition)
-        yPosition += 7
+        doc.text(`• Data Final: ${formatDateToBrazilian(filtros.dataFinal)}`, 20, yPosition)
+        yPosition += 6
+      }
+      
+      if (!filtros.filial && !filtros.dataInicial && !filtros.dataFinal) {
+        doc.text('• Nenhum filtro aplicado (todos os dados)', 20, yPosition)
+        yPosition += 6
       }
       
       yPosition += 10
       
       // Resumo dos totais
-      doc.setFontSize(14)
-      doc.text('Resumo Financeiro:', 14, yPosition)
-      yPosition += 10
-      
-      doc.setFontSize(10)
       const resumoData = [
         ['Total de OS', totalOS.toString()],
         ['Valor Total das Vendas', `R$ ${totalVendas.toFixed(2)}`],
@@ -319,43 +371,26 @@ const RelatorioOS: React.FC = () => {
         ['Margem Média por OS', `R$ ${margemMedia.toFixed(2)}`]
       ]
       
-      doc.autoTable({
-        startY: yPosition,
-        head: [['Indicador', 'Valor']],
-        body: resumoData,
-        theme: 'grid',
-        headStyles: { fillColor: [41, 128, 185] },
-        margin: { left: 14, right: 14 }
-      })
+      yPosition = drawTable(doc, ['Indicador', 'Valor'], resumoData, yPosition, 'Resumo Financeiro')
       
-      // Detalhes das OS
-      yPosition = (doc as any).lastAutoTable.finalY + 20
-      
-      doc.setFontSize(14)
-      doc.text('Detalhes das OS:', 14, yPosition)
-      yPosition += 10
-      
-      const osData = osFiltradas.map(os => [
-        formatDateToBrazilian(os.data),
-        os.filial,
-        `R$ ${os.valorVenda.toFixed(2)}`,
-        `R$ ${os.custoLentes.toFixed(2)}`,
-        `R$ ${os.custoArmacoes.toFixed(2)}`,
-        `R$ ${os.custoMkt.toFixed(2)}`,
-        `R$ ${os.outrosCustos.toFixed(2)}`,
-        getNomeMedico(os.medico_id),
-        os.numero_tco || '-'
-      ])
-      
-      doc.autoTable({
-        startY: yPosition,
-        head: [['Data', 'Filial', 'Venda', 'Lentes', 'Armação', 'MKT', 'Outros', 'Médico', 'TCO']],
-        body: osData,
-        theme: 'striped',
-        headStyles: { fillColor: [41, 128, 185] },
-        styles: { fontSize: 8 },
-        margin: { left: 14, right: 14 }
-      })
+      // Detalhes das OS (apenas se houver dados)
+      if (osFiltradas.length > 0) {
+        yPosition += 10
+        
+        const osData = osFiltradas.map(os => [
+          formatDateToBrazilian(os.data),
+          os.filial.substring(0, 10),
+          `R$ ${os.valorVenda.toFixed(0)}`,
+          `R$ ${os.custoLentes.toFixed(0)}`,
+          `R$ ${os.custoArmacoes.toFixed(0)}`,
+          `R$ ${os.custoMkt.toFixed(0)}`,
+          `R$ ${os.outrosCustos.toFixed(0)}`,
+          getNomeMedico(os.medico_id).substring(0, 12),
+          os.numero_tco?.substring(0, 8) || '-'
+        ])
+        
+        drawTable(doc, ['Data', 'Filial', 'Venda', 'Lentes', 'Armação', 'MKT', 'Outros', 'Médico', 'TCO'], osData, yPosition, 'Detalhes das OS')
+      }
       
       const nomeArquivo = `relatorio-os-${new Date().toISOString().slice(0, 10)}.pdf`
       doc.save(nomeArquivo)
