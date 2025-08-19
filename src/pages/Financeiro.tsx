@@ -27,10 +27,16 @@ import {
 import {
   Delete as DeleteIcon,
   Edit as EditIcon,
-
   PictureAsPdf as PdfIcon,
   Add as AddIcon,
-  Remove as RemoveIcon
+  Remove as RemoveIcon,
+  Person as PersonIcon,
+  AttachMoney as MoneyIcon,
+  Category as CategoryIcon,
+  Payment as PaymentIcon,
+  Info as InfoIcon,
+  Save as SaveIcon,
+  Cancel as CancelIcon
 } from '@mui/icons-material';
 import { supabase } from '@/services/supabase'
 import { getDiaSemana, formatarData } from '@/utils/dateUtils';
@@ -842,11 +848,12 @@ const Financeiro: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               Registros Financeiros
             </Typography>
-            {registrosFinanceiros.length === 0 ? (
-              <Typography color="text.secondary">
-                Nenhum registro encontrado. Selecione uma filial e data para visualizar os registros.
-              </Typography>
-            ) : (
+            <>
+              {registrosFinanceiros.length === 0 && (
+                <Typography color="text.secondary" sx={{ mb: 2 }}>
+                  Nenhum registro encontrado. Selecione uma filial e data para visualizar os registros.
+                </Typography>
+              )}
               <TableContainer component={Paper} sx={{ 
                 maxWidth: '100%', 
                 overflowX: 'auto',
@@ -865,22 +872,95 @@ const Financeiro: React.FC = () => {
                   },
                 },
               }}>
-                <Table sx={{ minWidth: 800 }}>
+                <Table sx={{ minWidth: 800, '& .MuiTableCell-root': { padding: '4px 8px' } }}>
                   <TableHead>
-                    <TableRow sx={{ backgroundColor: '#f8f9fa' }}>
-                      <TableCell sx={{ minWidth: 140, fontWeight: 'bold', fontSize: '0.875rem' }}>Cliente</TableCell>
-                      <TableCell sx={{ minWidth: 100, fontWeight: 'bold', fontSize: '0.875rem' }}>R$</TableCell>
-                      <TableCell sx={{ minWidth: 120, fontWeight: 'bold', fontSize: '0.875rem' }}>Tipo</TableCell>
-                      <TableCell sx={{ minWidth: 180, fontWeight: 'bold', fontSize: '0.875rem' }}>Forma de Pagamento</TableCell>
-                      <TableCell sx={{ minWidth: 110, fontWeight: 'bold', fontSize: '0.875rem' }}>Situação</TableCell>
-                      <TableCell sx={{ minWidth: 130, fontWeight: 'bold', fontSize: '0.875rem' }}>Observações</TableCell>
-                      <TableCell sx={{ minWidth: 110, fontWeight: 'bold', fontSize: '0.875rem' }}>Ações</TableCell>
+                    <TableRow sx={{ 
+                      backgroundColor: '#1976d2',
+                      '& .MuiTableCell-root': {
+                        color: 'white !important',
+                        borderBottom: 'none',
+                        backgroundColor: '#1976d2'
+                      }
+                    }}>
+                      <TableCell sx={{ 
+                        minWidth: 180, 
+                        fontWeight: 'bold', 
+                        fontSize: '0.75rem'
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <PersonIcon fontSize="small" />
+                          Cliente
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ 
+                        minWidth: 80, 
+                        fontWeight: 'bold', 
+                        fontSize: '0.75rem'
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <MoneyIcon fontSize="small" />
+                          R$
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ 
+                        minWidth: 100, 
+                        fontWeight: 'bold', 
+                        fontSize: '0.75rem'
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <CategoryIcon fontSize="small" />
+                          Tipo
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ 
+                        minWidth: 160, 
+                        fontWeight: 'bold', 
+                        fontSize: '0.65rem'
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <PaymentIcon fontSize="small" />
+                          Forma de Pagamento
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ 
+                        minWidth: 90, 
+                        fontWeight: 'bold', 
+                        fontSize: '0.75rem'
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <InfoIcon fontSize="small" />
+                          Situação
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ 
+                        minWidth: 120, 
+                        fontWeight: 'bold', 
+                        fontSize: '0.75rem'
+                      }}>
+                        Observações
+                      </TableCell>
+                      <TableCell sx={{ 
+                        minWidth: 90, 
+                        fontWeight: 'bold', 
+                        fontSize: '0.75rem'
+                      }}>
+                        Ações
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {registrosFinanceiros.map((registro) => (
-                      <TableRow key={registro.id} sx={{ '&:hover': { backgroundColor: '#f8f9fa' } }}>
-                        <TableCell sx={{ minWidth: 140, py: 0.5, pr: 1 }}>
+                    {registrosFinanceiros.map((registro, index) => (
+                      <TableRow key={registro.id} sx={{ 
+                        backgroundColor: index % 2 === 0 ? '#fafafa' : 'white',
+                        '&:hover': { 
+                          backgroundColor: '#e3f2fd',
+                          transform: 'scale(1.01)',
+                          transition: 'all 0.2s ease-in-out',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                        },
+                        transition: 'all 0.2s ease-in-out'
+                      }}>
+                        <TableCell sx={{ minWidth: 180 }}>
                           {registro.editando ? (
                             <TextField
                               value={registro.cliente}
@@ -891,17 +971,18 @@ const Financeiro: React.FC = () => {
                               sx={{
                                 '& .MuiOutlinedInput-root': {
                                   backgroundColor: '#fff',
-                                  height: '28px'
+                                  height: '28px',
+                                  fontSize: '0.7rem'
                                 }
                               }}
                             />
                           ) : (
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.7rem' }}>
                               {registro.cliente}
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell sx={{ minWidth: 100, py: 0.5, pr: 1 }}>
+                        <TableCell sx={{ minWidth: 80 }}>
                           {registro.editando ? (
                             <TextField
                               value={registro.valor}
@@ -910,22 +991,23 @@ const Financeiro: React.FC = () => {
                               fullWidth
                               variant="outlined"
                               InputProps={{
-                                startAdornment: <span style={{ color: '#666', marginRight: '4px' }}>R$</span>,
+                                startAdornment: <span style={{ color: '#666', marginRight: '4px', fontSize: '0.7rem' }}>R$</span>,
                               }}
                               sx={{
                                 '& .MuiOutlinedInput-root': {
                                   backgroundColor: '#fff',
-                                  height: '28px'
+                                  height: '28px',
+                                  fontSize: '0.7rem'
                                 }
                               }}
                             />
                           ) : (
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#1976d2' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.7rem' }}>
                               R$ {registro.valor}
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell sx={{ minWidth: 120, py: 0.5, pr: 1 }}>
+                        <TableCell sx={{ minWidth: 100 }}>
                           {registro.editando ? (
                             <FormControl fullWidth size="small">
                                 <Select
@@ -936,7 +1018,8 @@ const Financeiro: React.FC = () => {
                                   variant="outlined"
                                   sx={{
                                     backgroundColor: '#fff',
-                                    height: '28px'
+                                    height: '28px',
+                                    fontSize: '0.7rem'
                                   }}
                                 >
                                   <MenuItem value="particular">Particular</MenuItem>
@@ -951,9 +1034,16 @@ const Financeiro: React.FC = () => {
                                 label={registro.tipo} 
                                 size="small" 
                                 sx={{
-                                  backgroundColor: '#e3f2fd',
-                                  color: '#1976d2',
-                                  fontWeight: 500
+                                  background: 'linear-gradient(45deg, #667eea 30%, #764ba2 90%)',
+                                  color: 'white',
+                                  fontWeight: 600,
+                                  fontSize: '0.7rem',
+                                  textTransform: 'capitalize',
+                                  boxShadow: '0 2px 4px rgba(102, 126, 234, 0.3)',
+                                  '&:hover': {
+                                    transform: 'scale(1.05)',
+                                    transition: 'all 0.2s ease-in-out'
+                                  }
                                 }}
                               />
                             )}
@@ -1068,11 +1158,16 @@ const Financeiro: React.FC = () => {
                                   <Chip 
                                     label={`${forma.forma_pagamento}: R$ ${forma.valor}`} 
                                     size="small" 
-                                    variant="outlined"
                                     sx={{
-                                      borderColor: '#1976d2',
-                                      color: '#1976d2',
-                                      backgroundColor: '#e3f2fd'
+                                      background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
+                                      color: 'white',
+                                      fontWeight: 500,
+                                      boxShadow: '0 1px 3px rgba(76, 175, 80, 0.3)',
+                                      border: 'none',
+                                      '&:hover': {
+                                        transform: 'scale(1.02)',
+                                        transition: 'all 0.2s ease-in-out'
+                                      }
                                     }}
                                   />
                                 </Box>
@@ -1107,10 +1202,19 @@ const Financeiro: React.FC = () => {
                                 label={registro.situacao} 
                                 size="small"
                                 sx={{
-                                  backgroundColor: '#e3f2fd',
-                                  color: '#1976d2',
-                                  fontWeight: 500,
-                                  textTransform: 'capitalize'
+                                  background: registro.situacao === 'efetivacao' 
+                                    ? 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)'
+                                    : registro.situacao === 'caso_clinico'
+                                    ? 'linear-gradient(45deg, #ff9800 30%, #ffb74d 90%)'
+                                    : 'linear-gradient(45deg, #f44336 30%, #ef5350 90%)',
+                                  color: 'white',
+                                  fontWeight: 600,
+                                  textTransform: 'capitalize',
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                  '&:hover': {
+                                    transform: 'scale(1.05)',
+                                    transition: 'all 0.2s ease-in-out'
+                                  }
                                 }}
                               />
                             )}
@@ -1143,44 +1247,101 @@ const Financeiro: React.FC = () => {
                           </TableCell>
                           <TableCell sx={{ minWidth: 110, py: 0.5, pr: 1 }}>
                             <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                              <Tooltip title="Editar">
-                                <IconButton
-                                  size="small"
-                                  color="primary"
-                                  onClick={() => {
-                                    setRegistrosFinanceiros(prev => 
-                                      prev.map(r => r.id === registro.id ? { ...r, editando: true } : r)
-                                    );
-                                  }}
-                                  sx={{
-                                    backgroundColor: '#e3f2fd',
-                                    '&:hover': {
-                                      backgroundColor: '#bbdefb'
-                                    }
-                                  }}
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Excluir">
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={() => {
-                                    if (window.confirm('Tem certeza que deseja excluir este registro?')) {
-                                      excluirRegistro(registro.id);
-                                    }
-                                  }}
-                                  sx={{
-                                    backgroundColor: '#ffebee',
-                                    '&:hover': {
-                                      backgroundColor: '#ffcdd2'
-                                    }
-                                  }}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                              {registro.editando ? (
+                                <>
+                                  <Tooltip title="Salvar">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => {
+                                        setRegistrosFinanceiros(prev => 
+                                          prev.map(r => r.id === registro.id ? { ...r, editando: false } : r)
+                                        );
+                                      }}
+                                      sx={{
+                                        background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
+                                        color: 'white',
+                                        '&:hover': {
+                                          background: 'linear-gradient(45deg, #388e3c 30%, #4caf50 90%)',
+                                          transform: 'scale(1.1)'
+                                        },
+                                        transition: 'all 0.2s ease-in-out',
+                                        boxShadow: '0 2px 4px rgba(76, 175, 80, 0.3)'
+                                      }}
+                                    >
+                                      <SaveIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Cancelar">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => {
+                                        setRegistrosFinanceiros(prev => 
+                                          prev.map(r => r.id === registro.id ? { ...r, editando: false } : r)
+                                        );
+                                      }}
+                                      sx={{
+                                        background: 'linear-gradient(45deg, #ff9800 30%, #ffb74d 90%)',
+                                        color: 'white',
+                                        '&:hover': {
+                                          background: 'linear-gradient(45deg, #f57c00 30%, #ff9800 90%)',
+                                          transform: 'scale(1.1)'
+                                        },
+                                        transition: 'all 0.2s ease-in-out',
+                                        boxShadow: '0 2px 4px rgba(255, 152, 0, 0.3)'
+                                      }}
+                                    >
+                                      <CancelIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                </>
+                              ) : (
+                                <>
+                                  <Tooltip title="Editar">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => {
+                                        setRegistrosFinanceiros(prev => 
+                                          prev.map(r => r.id === registro.id ? { ...r, editando: true } : r)
+                                        );
+                                      }}
+                                      sx={{
+                                        background: 'linear-gradient(45deg, #2196f3 30%, #64b5f6 90%)',
+                                        color: 'white',
+                                        '&:hover': {
+                                          background: 'linear-gradient(45deg, #1976d2 30%, #2196f3 90%)',
+                                          transform: 'scale(1.1)'
+                                        },
+                                        transition: 'all 0.2s ease-in-out',
+                                        boxShadow: '0 2px 4px rgba(33, 150, 243, 0.3)'
+                                      }}
+                                    >
+                                      <EditIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Excluir">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => {
+                                        if (window.confirm('Tem certeza que deseja excluir este registro?')) {
+                                          excluirRegistro(registro.id);
+                                        }
+                                      }}
+                                      sx={{
+                                        background: 'linear-gradient(45deg, #f44336 30%, #ef5350 90%)',
+                                        color: 'white',
+                                        '&:hover': {
+                                          background: 'linear-gradient(45deg, #d32f2f 30%, #f44336 90%)',
+                                          transform: 'scale(1.1)'
+                                        },
+                                        transition: 'all 0.2s ease-in-out',
+                                        boxShadow: '0 2px 4px rgba(244, 67, 54, 0.3)'
+                                      }}
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                </>
+                              )}
                             </Box>
                           </TableCell>
                       </TableRow>
@@ -1188,7 +1349,7 @@ const Financeiro: React.FC = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
-            )}
+            </>
           </CardContent>
         </Card>
       )}
