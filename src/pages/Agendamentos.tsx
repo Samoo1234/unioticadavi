@@ -412,11 +412,11 @@ export function Agendamentos() {
       {/* Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent sx={{ height: '100%', display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
                 <CalendarIcon color="primary" sx={{ fontSize: 40 }} />
-                <Box>
+                <Box sx={{ flex: 1 }}>
                   <Typography variant="h4" fontWeight="bold">
                     {totalAppointments}
                   </Typography>
@@ -429,11 +429,11 @@ export function Agendamentos() {
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent sx={{ height: '100%', display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
                 <CalendarIcon color="warning" sx={{ fontSize: 40 }} />
-                <Box>
+                <Box sx={{ flex: 1 }}>
                   <Typography variant="h4" fontWeight="bold">
                     {pendingAppointments}
                   </Typography>
@@ -446,11 +446,11 @@ export function Agendamentos() {
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent sx={{ height: '100%', display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
                 <CalendarIcon color="success" sx={{ fontSize: 40 }} />
-                <Box>
+                <Box sx={{ flex: 1 }}>
                   <Typography variant="h4" fontWeight="bold">
                     {confirmedAppointments}
                   </Typography>
@@ -463,11 +463,11 @@ export function Agendamentos() {
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent sx={{ height: '100%', display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
                 <CalendarIcon color="error" sx={{ fontSize: 40 }} />
-                <Box>
+                <Box sx={{ flex: 1 }}>
                   <Typography variant="h4" fontWeight="bold">
                     {canceledAppointments}
                   </Typography>
