@@ -20,8 +20,6 @@ import {
   LocationCity as CityIcon,
   AttachMoney as MoneyIcon,
   Receipt as ReceiptIcon,
-  Assignment as OrderIcon,
-  BarChart as ReportIcon,
   Settings as SettingsIcon,
   ExpandLess,
   ExpandMore,
@@ -29,7 +27,6 @@ import {
   Category as CategoryIcon,
   AccountBalance as AccountBalanceIcon,
   Description as DocumentIcon,
-  CreditCard as CreditCardIcon,
   ShoppingCart as ShoppingCartIcon,
   Assessment as AssessmentIcon,
   MonetizationOn as MonetizationOnIcon,
@@ -206,7 +203,7 @@ export function Sidebar() {
   const { userData } = useAuth()
   const [openMenus, setOpenMenus] = useState<string[]>(['sistema-agendamento', 'cmv'])
 
-  const hasPermission = (roles?: string[]) => {
+  const hasPermission = () => {
     // Durante desenvolvimento, todas as rotas estão acessíveis
     return true
   }
@@ -229,7 +226,7 @@ export function Sidebar() {
   }
 
   const renderMenuItem = (item: MenuItem, level = 0) => {
-    if (!hasPermission(item.roles)) {
+    if (!hasPermission()) {
       return null
     }
 
