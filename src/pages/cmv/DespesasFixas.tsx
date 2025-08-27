@@ -513,6 +513,18 @@ export default function DespesasFixas() {
     }
   }, [despesas, filtros, showInactivas]);
 
+  const getTotalDespesas = () => {
+    return despesasFiltradas.reduce((sum, d) => sum + d.valor, 0)
+  }
+
+  const getTotalPagas = () => {
+    return despesasFiltradas.filter(d => d.data_pagamento).reduce((sum, d) => sum + d.valor, 0)
+  }
+
+  const getTotalPendentes = () => {
+    return despesasFiltradas.filter(d => !d.data_pagamento).reduce((sum, d) => sum + d.valor, 0)
+  }
+
   // Função para abrir o diálogo de pagamento
   const handleOpenPaymentDialog = (id: number) => {
     const despesa = despesas.find(d => d.id === id);
@@ -725,6 +737,49 @@ export default function DespesasFixas() {
           </Box>
         </CardContent>
       </Card>
+      
+      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+        <Card sx={{ flex: 1 }}>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              Total de Despesas
+            </Typography>
+            <Typography variant="h5">
+              {formatValor(getTotalDespesas())}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card sx={{ flex: 1 }}>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              Total Pago
+            </Typography>
+            <Typography variant="h5" color="success.main">
+              {formatValor(getTotalPagas())}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card sx={{ flex: 1 }}>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              Total Pendente
+            </Typography>
+            <Typography variant="h5" color="warning.main">
+              {formatValor(getTotalPendentes())}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card sx={{ flex: 1 }}>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              Quantidade
+            </Typography>
+            <Typography variant="h5">
+              {despesasFiltradas.length}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Box>
 
       <Card>
         <CardContent>
