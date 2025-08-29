@@ -41,7 +41,7 @@ import {
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { supabase } from '../services/supabase';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+// DatePicker removido - não usado mais no modal
 
 
 interface Filial {
@@ -64,11 +64,20 @@ interface Appointment {
   updated_at: string;
 }
 
+interface DataDisponivel {
+  id: string;
+  data: string;
+  filial_id: string;
+  medico_id: string;
+  ativa: boolean;
+  horarios_disponiveis: string[];
+}
+
 interface AppointmentFormData {
   nome: string;
   telefone: string;
-  cidade: string;
-  data: string;
+  filial_id: string;
+  data_id: string;
   horario: string;
   observacoes: string;
   status: 'pendente' | 'confirmado' | 'cancelado';
@@ -77,8 +86,8 @@ interface AppointmentFormData {
 const initialFormData: AppointmentFormData = {
   nome: '',
   telefone: '',
-  cidade: '',
-  data: '',
+  filial_id: '',
+  data_id: '',
   horario: '',
   observacoes: '',
   status: 'pendente'
@@ -87,6 +96,9 @@ const initialFormData: AppointmentFormData = {
 export function Agendamentos() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [filiais, setFiliais] = useState<Filial[]>([]);
+  const [datasDisponiveis, setDatasDisponiveis] = useState<DataDisponivel[]>([]);
+  const [horariosDisponiveis, setHorariosDisponiveis] = useState<string[]>([]);
+  const [selectedCityDoctor, setSelectedCityDoctor] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
@@ -161,12 +173,12 @@ export function Agendamentos() {
       errors.telefone = 'Formato de telefone inválido. Use (99) 99999-9999';
     }
 
-    if (!formData.cidade) {
-      errors.cidade = 'Cidade é obrigatória';
+    if (!formData.filial_id) {
+      errors.filial_id = 'Cidade é obrigatória';
     }
 
-    if (!formData.data) {
-      errors.data = 'Data é obrigatória';
+    if (!formData.data_id) {
+      errors.data_id = 'Data é obrigatória';
     }
 
     if (!formData.horario) {
@@ -183,13 +195,16 @@ export function Agendamentos() {
     try {
       setSubmitting(true);
 
-      const appointmentData = {
-        ...formData,
-        updated_at: new Date().toISOString()
-      };
-
       if (editingAppointment) {
         // Atualizar agendamento existente
+        const appointmentData = {
+          nome: formData.nome,
+          telefone: formData.telefone,
+          observacoes: formData.observacoes,
+          status: formData.status,
+          updated_at: new Date().toISOString()
+        };
+
         const { error } = await supabase
           .from('agendamentos')
           .update(appointmentData)
@@ -199,22 +214,66 @@ export function Agendamentos() {
         toast.success('Agendamento atualizado com sucesso!');
       } else {
         // Criar novo agendamento
+        const dataSelecionada = datasDisponiveis.find(d => d.id === formData.data_id);
+        const filialSelecionada = filiais.find(f => f.id === formData.filial_id);
+
+        if (!dataSelecionada || !filialSelecionada) {
+          throw new Error('Cidade ou data não encontrada');
+        }
+
+        // Verificar se o horário já está agendado
+        const { data: agendamentos, error: checkError } = await supabase
+          .from('agendamentos')
+          .select('horario')
+          .eq('data', dataSelecionada.data)
+          .eq('cidade', filialSelecionada.nome)
+          .eq('horario', formData.horario);
+          
+        if (checkError) throw checkError;
+        
+        if (agendamentos && agendamentos.length > 0) {
+          throw new Error('Este horário já está agendado. Por favor, escolha outro.');
+        }
+
+        const appointmentData = {
+          cidade: filialSelecionada.nome,
+          data: dataSelecionada.data,
+          horario: formData.horario,
+          nome: formData.nome,
+          telefone: formData.telefone,
+          observacoes: formData.observacoes,
+          status: 'pendente', // Status padrão para novos agendamentos
+          created_at: new Date().toISOString()
+        };
+
+        console.log('📅 Criando agendamento:', appointmentData);
+
         const { error } = await supabase
           .from('agendamentos')
-          .insert([{
-            ...appointmentData,
-            created_at: new Date().toISOString()
-          }]);
+          .insert([appointmentData]);
 
         if (error) throw error;
         toast.success('Agendamento criado com sucesso!');
+        
+        // Log para debug
+        console.log('✅ Agendamento criado:', {
+          cidade: filialSelecionada.nome,
+          data: dataSelecionada.data,
+          nome: formData.nome
+        });
       }
 
       handleCloseDialog();
       loadAppointments();
     } catch (error: any) {
       console.error('Erro ao salvar agendamento:', error);
-      toast.error('Erro ao salvar agendamento');
+      
+      if (error.message && error.message.includes('horário já está agendado')) {
+        toast.error(error.message);
+        setFormErrors(prev => ({ ...prev, horario: 'Este horário já está agendado' }));
+      } else {
+        toast.error(error.message || 'Erro ao salvar agendamento');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -222,11 +281,13 @@ export function Agendamentos() {
 
   const handleEdit = (appointment: Appointment) => {
     setEditingAppointment(appointment);
+    
+    // Para edição, usar dados simples sem IDs relacionais
     setFormData({
       nome: appointment.nome,
       telefone: appointment.telefone,
-      cidade: appointment.cidade,
-      data: appointment.data,
+      filial_id: '', // Não usado em edição
+      data_id: '', // Não usado em edição
       horario: appointment.horario,
       observacoes: appointment.observacoes || appointment.informacoes || '',
       status: appointment.status
@@ -293,12 +354,167 @@ export function Agendamentos() {
     setEditingAppointment(null);
     setFormData(initialFormData);
     setFormErrors({});
+    setDatasDisponiveis([]);
+    setHorariosDisponiveis([]);
+    setSelectedCityDoctor('');
+  };
+
+  const loadDatasDisponiveis = async (filialId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('datas_disponiveis')
+        .select('*')
+        .eq('filial_id', filialId)
+        .eq('ativa', true)
+        .gte('data', new Date().toISOString().split('T')[0])
+        .order('data');
+
+      if (error) throw error;
+      setDatasDisponiveis(data || []);
+      
+      // Buscar o médico associado à filial selecionada
+      if (data && data.length > 0) {
+        const filialDates = data.filter(d => d.filial_id === filialId);
+        if (filialDates.length > 0 && filialDates[0].medico_id) {
+          const { data: medicoData, error: medicoError } = await supabase
+            .from('medicos')
+            .select('nome')
+            .eq('id', filialDates[0].medico_id)
+            .single();
+            
+          if (!medicoError && medicoData) {
+            setSelectedCityDoctor(medicoData.nome);
+          }
+        }
+      }
+      
+      return data;
+    } catch (error: any) {
+      console.error('Erro ao carregar datas disponíveis:', error);
+      toast.error('Erro ao carregar datas disponíveis');
+      return [];
+    }
+  };
+
+  const loadHorariosDisponiveis = async (dataId: string) => {
+    try {
+      const dataSelecionada = datasDisponiveis.find(d => d.id === dataId);
+      
+      if (dataSelecionada && dataSelecionada.horarios_disponiveis && Array.isArray(dataSelecionada.horarios_disponiveis)) {
+        setHorariosDisponiveis(dataSelecionada.horarios_disponiveis);
+      } else {
+        // Gerar horários baseado na configuração
+        const { data: configData, error: configError } = await supabase
+          .from('configuracoes_horarios')
+          .select('*')
+          .eq('filial_id', dataSelecionada?.filial_id || '')
+          .single();
+          
+        if (!configError && configData) {
+          const slots: string[] = [];
+          
+          const formatTime = (hours: number, minutes: number) => {
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+          };
+          
+          const addTimeSlots = (start: string, end: string, interval: number) => {
+            const [startHours, startMinutes] = start.split(':').map(Number);
+            const [endHours, endMinutes] = end.split(':').map(Number);
+            
+            let currentHours = startHours;
+            let currentMinutes = startMinutes;
+
+            while (
+              currentHours < endHours || 
+              (currentHours === endHours && currentMinutes < endMinutes)
+            ) {
+              const timeStr = formatTime(currentHours, currentMinutes);
+              slots.push(timeStr);
+              
+              currentMinutes += interval;
+              if (currentMinutes >= 60) {
+                currentHours += Math.floor(currentMinutes / 60);
+                currentMinutes %= 60;
+              }
+            }
+          };
+
+          const horarios = {
+            manhaInicio: configData.manha_inicio || '08:00',
+            manhaFim: configData.manha_fim || '12:00',
+            tardeInicio: configData.tarde_inicio || '14:00',
+            tardeFim: configData.tarde_fim || '18:00'
+          };
+
+          if (configData.periodo_manha) {
+            addTimeSlots(horarios.manhaInicio, horarios.manhaFim, configData.intervalo || 30);
+          }
+          if (configData.periodo_tarde) {
+            addTimeSlots(horarios.tardeInicio, horarios.tardeFim, configData.intervalo || 30);
+          }
+          
+          // Filtrar horários já agendados
+          if (dataSelecionada) {
+            const { data: agendamentos, error: agendamentosError } = await supabase
+              .from('agendamentos')
+              .select('horario')
+              .eq('data', dataSelecionada.data)
+              .eq('cidade', filiais.find(f => f.id === dataSelecionada.filial_id)?.nome || '');
+              
+            if (!agendamentosError && agendamentos && agendamentos.length > 0) {
+              const horariosAgendados = agendamentos.map(a => a.horario);
+              const horariosDisponiveis = slots.filter(slot => !horariosAgendados.includes(slot));
+              setHorariosDisponiveis(horariosDisponiveis);
+              return;
+            }
+          }
+          
+          setHorariosDisponiveis(slots);
+          return;
+        }
+        
+        setHorariosDisponiveis([]);
+      }
+    } catch (error: any) {
+      console.error('Erro ao carregar horários:', error);
+      setHorariosDisponiveis([]);
+    }
+  };
+
+  const formatPhoneNumber = (value: string) => {
+    const phoneDigits = value.replace(/\D/g, '');
+    
+    if (phoneDigits.length <= 2) {
+      return phoneDigits;
+    } else if (phoneDigits.length <= 6) {
+      return `(${phoneDigits.slice(0, 2)}) ${phoneDigits.slice(2)}`;
+    } else if (phoneDigits.length <= 10) {
+      return `(${phoneDigits.slice(0, 2)}) ${phoneDigits.slice(2, 6)}-${phoneDigits.slice(6, 10)}`;
+    } else {
+      return `(${phoneDigits.slice(0, 2)}) ${phoneDigits.slice(2, 7)}-${phoneDigits.slice(7, 11)}`;
+    }
   };
 
   const handleInputChange = (field: keyof AppointmentFormData, value: string | 'pendente' | 'confirmado' | 'cancelado') => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    if (field === 'telefone') {
+      const formattedPhone = formatPhoneNumber(value as string);
+      setFormData(prev => ({ ...prev, [field]: formattedPhone }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
+    
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+
+    // Carregar dados dependentes
+    if (field === 'filial_id' && value) {
+      loadDatasDisponiveis(value as string);
+      setFormData(prev => ({ ...prev, data_id: '', horario: '' }));
+      setHorariosDisponiveis([]);
+    } else if (field === 'data_id' && value) {
+      loadHorariosDisponiveis(value as string);
+      setFormData(prev => ({ ...prev, horario: '' }));
     }
   };
 
@@ -683,75 +899,112 @@ export function Agendamentos() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
-              <FormControl fullWidth error={!!formErrors.cidade}>
-                <InputLabel>Filial *</InputLabel>
-                <Select
-                  value={formData.cidade}
-                  label="Filial *"
-                  onChange={(e) => handleInputChange('cidade', e.target.value)}
-                >
-                  {filiais.map(filial => (
-                    <MenuItem key={filial.id} value={filial.nome}>
-                      {filial.nome}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {formErrors.cidade && (
-                  <Typography variant="caption" color="error">
-                    {formErrors.cidade}
-                  </Typography>
-                )}
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <DatePicker
-                label="Data *"
-                value={formData.data ? new Date(formData.data + 'T00:00:00') : null}
-                onChange={(novaData) => {
-                  if (novaData) {
-                    const dataISO = novaData.toISOString().split('T')[0]
-                    handleInputChange('data', dataISO)
-                  } else {
-                    handleInputChange('data', '')
-                  }
-                }}
-                format="dd/MM/yyyy"
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    error: !!formErrors.data,
-                    helperText: formErrors.data
-                  }
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                label="Horário *"
-                type="time"
-                value={formData.horario}
-                onChange={(e) => handleInputChange('horario', e.target.value)}
-                error={!!formErrors.horario}
-                helperText={formErrors.horario}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={formData.status}
-                  label="Status"
-                  onChange={(e) => handleInputChange('status', e.target.value as 'pendente' | 'confirmado' | 'cancelado')}
-                >
-                  <MenuItem value="pendente">Pendente</MenuItem>
-                  <MenuItem value="confirmado">Confirmado</MenuItem>
-                  <MenuItem value="cancelado">Cancelado</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+            {!editingAppointment && (
+              <>
+                <Grid item xs={12}>
+                  <FormControl fullWidth error={!!formErrors.filial_id}>
+                    <InputLabel>Selecione uma cidade *</InputLabel>
+                    <Select
+                      value={formData.filial_id}
+                      label="Selecione uma cidade *"
+                      onChange={(e) => handleInputChange('filial_id', e.target.value)}
+                    >
+                      {filiais.map(filial => (
+                        <MenuItem key={filial.id} value={filial.id}>
+                          {filial.nome}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {formErrors.filial_id && (
+                      <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                        {formErrors.filial_id}
+                      </Typography>
+                    )}
+                    {selectedCityDoctor && (
+                      <Typography variant="body2" color="primary" sx={{ mt: 1, fontWeight: 'medium' }}>
+                        Médico: {selectedCityDoctor}
+                      </Typography>
+                    )}
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth error={!!formErrors.data_id}>
+                    <InputLabel>Selecione uma data *</InputLabel>
+                    <Select
+                      value={formData.data_id}
+                      label="Selecione uma data *"
+                      onChange={(e) => handleInputChange('data_id', e.target.value)}
+                      disabled={!formData.filial_id}
+                    >
+                      {datasDisponiveis.map(data => (
+                        <MenuItem key={data.id} value={data.id}>
+                          {data.data ? new Date(data.data + 'T00:00:00').toLocaleDateString('pt-BR', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          }) : data.data}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {formErrors.data_id && (
+                      <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                        {formErrors.data_id}
+                      </Typography>
+                    )}
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth error={!!formErrors.horario}>
+                    <InputLabel>Selecione um horário *</InputLabel>
+                    <Select
+                      value={formData.horario}
+                      label="Selecione um horário *"
+                      onChange={(e) => handleInputChange('horario', e.target.value)}
+                      disabled={!formData.data_id || horariosDisponiveis.length === 0}
+                    >
+                      {horariosDisponiveis.length > 0 ? (
+                        horariosDisponiveis.map(horario => (
+                          <MenuItem key={horario} value={horario}>
+                            {horario}
+                          </MenuItem>
+                        ))
+                      ) : (
+                        <MenuItem disabled>
+                          Nenhum horário disponível para esta data
+                        </MenuItem>
+                      )}
+                    </Select>
+                    {formErrors.horario && (
+                      <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                        {formErrors.horario}
+                      </Typography>
+                    )}
+                    {formData.data_id && horariosDisponiveis.length === 0 && (
+                      <Typography variant="caption" color="warning.main" sx={{ mt: 0.5 }}>
+                        Não há horários configurados para esta data
+                      </Typography>
+                    )}
+                  </FormControl>
+                </Grid>
+              </>
+            )}
+            {editingAppointment && (
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={formData.status}
+                    label="Status"
+                    onChange={(e) => handleInputChange('status', e.target.value as 'pendente' | 'confirmado' | 'cancelado')}
+                  >
+                    <MenuItem value="pendente">Pendente</MenuItem>
+                    <MenuItem value="confirmado">Confirmado</MenuItem>
+                    <MenuItem value="cancelado">Cancelado</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
             <Grid item xs={12}>
               <TextField
                 fullWidth

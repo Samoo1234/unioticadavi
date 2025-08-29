@@ -249,11 +249,14 @@ const Financeiro: React.FC = () => {
       }
 
       const agendamentoIds = agendamentosFilial?.map(a => a.id) || [];
-      console.log('🔍 Debug Financeiro:');
+      console.log('🔍 Debug Financeiro DETALHADO:');
       console.log('- Filial selecionada:', nomeFilial);
       console.log('- Data selecionada:', dataFormatada);
       console.log('- Agendamentos encontrados:', agendamentosFilial);
       console.log('- IDs dos agendamentos:', agendamentoIds);
+      console.log('- Data do objeto selecionado:', dataObj);
+      console.log('- Cidade selecionada ID:', cidadeSelecionada);
+      console.log('- Data selecionada ID:', dataSelecionada);
       
       // Buscar registros financeiros por data e cidade diretamente
       const { data: registrosData, error: registrosError } = await supabase
@@ -294,9 +297,25 @@ const Financeiro: React.FC = () => {
       const agendamentosProcessados: Agendamento[] = agendamentosData || [];
       const registrosDeAgendamentos = [...registros];
 
-      // Só adicionar novos registros se não houver registros salvos
-      if (registros.length === 0) {
-        agendamentosProcessados.forEach((agendamento) => {
+      console.log('📊 Processamento de registros:');
+      console.log('- Registros financeiros existentes:', registros.length);
+      console.log('- Agendamentos para processar:', agendamentosProcessados.length);
+      console.log('- Agendamentos completos:', agendamentosProcessados);
+      
+      // Verificar quais agendamentos ainda não têm registros financeiros
+      const agendamentosComRegistros = registros.map(r => r.agendamento_id).filter(Boolean);
+      const agendamentosSemRegistros = agendamentosProcessados.filter(agendamento => 
+        !agendamentosComRegistros.includes(agendamento.id)
+      );
+      
+      console.log('📋 Análise de registros:');
+      console.log('- Agendamentos com registros:', agendamentosComRegistros);
+      console.log('- Agendamentos sem registros:', agendamentosSemRegistros.map(a => ({ id: a.id, nome: a.nome })));
+      
+      // Adicionar registros para agendamentos que ainda não têm
+      if (agendamentosSemRegistros.length > 0) {
+        console.log('🆕 Criando novos registros financeiros para agendamentos sem registro...');
+        agendamentosSemRegistros.forEach((agendamento) => {
           const novoRegistroId = `novo_${agendamento.id}`;
           
           let nomeCliente = '';
