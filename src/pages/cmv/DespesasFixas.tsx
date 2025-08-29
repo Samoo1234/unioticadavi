@@ -68,10 +68,12 @@ interface DespesaFixaCompleta {
   categoria_id: number | null
   categoria_nome?: string
   nome?: string
+  credor?: string
   valor: number
   periodicidade: 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual'
   dia_vencimento: number
   data_vencimento?: string
+  data_vencimento_completa?: string
   observacoes?: string
   status: 'ativo' | 'inativo'
   created_at: string
@@ -103,6 +105,8 @@ export default function DespesasFixas() {
   const [showInactivas, setShowInactivas] = useState(false)
   const [alert, setAlert] = useState({ show: false, message: '', severity: 'success' as 'success' | 'error' })
   const [formErrors, setFormErrors] = useState<FormErrors>({})
+  const [selectedItems, setSelectedItems] = useState<number[]>([])
+  const [selectAll, setSelectAll] = useState(false)
 
   // Filtros
   const [filtros, setFiltros] = useState({
@@ -115,6 +119,7 @@ export default function DespesasFixas() {
   const [formData, setFormData] = useState({
     filial_id: '',
     categoria_id: '',
+    credor: '',
     valor: '',
     periodicidade: 'mensal' as 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual',
     data_vencimento: null as Date | null,
@@ -159,10 +164,12 @@ export default function DespesasFixas() {
         filial_id: number;
         categoria_id: number | null;
         nome?: string;
+        credor?: string;
         valor: number;
         periodicidade: 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
         dia_vencimento: number;
         data_vencimento?: string;
+        data_vencimento_completa?: string;
         observacoes?: string;
         status: 'ativo' | 'inativo';
         created_at: string;
@@ -209,7 +216,7 @@ export default function DespesasFixas() {
       const { data, error } = await supabase
         .from('categorias')
         .select('*')
-        .eq('tipo', 'despesa_fixa')
+        .in('tipo', ['fixa', 'despesa_fixa'])
         .order('nome')
 
       if (error) throw error
@@ -229,8 +236,34 @@ export default function DespesasFixas() {
     return isValid(data) ? format(data, 'dd/MM/yyyy') : '-'
   }
 
-  const formatValor = (valor: number) => {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  // Função para extrair e formatar a data completa das observações
+  const formatarDataVencimento = (despesa: DespesaFixaCompleta): string => {
+    // Usar data_vencimento_completa se disponível
+    if (despesa.data_vencimento_completa) {
+      const data = new Date(despesa.data_vencimento_completa);
+      const dia = String(data.getDate()).padStart(2, '0');
+      const mes = String(data.getMonth() + 1).padStart(2, '0');
+      const ano = data.getFullYear();
+      return `${dia}/${mes}/${ano}`;
+    }
+    
+    // Fallback: método antigo
+    if (despesa.observacoes && despesa.observacoes.includes(' - ')) {
+      const mesAnoMatch = despesa.observacoes.match(/- (\d{2})\/(\d{4})/);
+      if (mesAnoMatch) {
+        const mes = mesAnoMatch[1];
+        const ano = mesAnoMatch[2];
+        const dia = String(despesa.dia_vencimento).padStart(2, '0');
+        return `${dia}/${mes}/${ano}`;
+      }
+    }
+    
+    // Fallback final: usar mês/ano atual
+    const hoje = new Date();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    const ano = hoje.getFullYear();
+    const dia = String(despesa.dia_vencimento).padStart(2, '0');
+    return `${dia}/${mes}/${ano}`;
   }
 
   const getPeriodicidadeLabel = (periodicidade: string) => {
@@ -244,6 +277,13 @@ export default function DespesasFixas() {
     return labels[periodicidade as keyof typeof labels] || periodicidade
   }
 
+  const formatValor = (valor: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(valor)
+  }
+
 
   const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let valor = e.target.value.replace(',', '.')
@@ -253,13 +293,28 @@ export default function DespesasFixas() {
   const handleOpenDialog = (despesa?: DespesaFixaCompleta) => {
     if (despesa) {
       setEditingId(despesa.id)
-      // Converter dia_vencimento para uma data completa
-      const dataAtual = new Date();
-      const dataVencimento = new Date(dataAtual.getFullYear(), dataAtual.getMonth(), despesa.dia_vencimento);
+      
+      // Extrair mês/ano das observações se existir (formato: "- MM/YYYY")
+      let dataVencimento = new Date();
+      if (despesa.observacoes && despesa.observacoes.includes(' - ')) {
+        const mesAnoMatch = despesa.observacoes.match(/- (\d{2})\/(\d{4})/);
+        if (mesAnoMatch) {
+          const mes = parseInt(mesAnoMatch[1]) - 1; // JavaScript usa mês 0-11
+          const ano = parseInt(mesAnoMatch[2]);
+          dataVencimento = new Date(ano, mes, despesa.dia_vencimento);
+        } else {
+          // Fallback: usar data atual com o dia de vencimento
+          dataVencimento = new Date(dataVencimento.getFullYear(), dataVencimento.getMonth(), despesa.dia_vencimento);
+        }
+      } else {
+        // Fallback: usar data atual com o dia de vencimento
+        dataVencimento = new Date(dataVencimento.getFullYear(), dataVencimento.getMonth(), despesa.dia_vencimento);
+      }
       
       setFormData({
         filial_id: despesa.filial_id.toString(),
         categoria_id: despesa.categoria_id?.toString() || '',
+        credor: despesa.credor || despesa.nome || '',
         valor: despesa.valor.toString(),
         periodicidade: despesa.periodicidade,
         data_vencimento: dataVencimento,
@@ -270,6 +325,7 @@ export default function DespesasFixas() {
       setFormData({
         filial_id: '',
         categoria_id: '',
+        credor: '',
         valor: '',
         periodicidade: 'mensal',
         data_vencimento: null,
@@ -324,7 +380,7 @@ export default function DespesasFixas() {
       const despesaData = {
         filial_id: parseInt(formData.filial_id),
         categoria_id: formData.categoria_id ? parseInt(formData.categoria_id) : null,
-        nome: categoria ? categoria.nome : 'Despesa',
+        credor: formData.credor || (categoria ? categoria.nome : 'Despesa'),
         valor: parseFloat(formData.valor),
         periodicidade: formData.periodicidade,
         dia_vencimento: diaVencimento,
@@ -348,19 +404,51 @@ export default function DespesasFixas() {
         showAlert('Despesa atualizada com sucesso!', 'success')
       } else {
         // Criar nova despesa
-        const { data, error } = await supabase
-          .from('despesas_fixas')
-          .insert({ ...despesaData, status: 'ativo' })
-          .select()
+        if (formData.periodicidade === 'mensal' && formData.data_vencimento) {
+          // Para despesas mensais, criar 12 registros (um para cada mês a partir da data selecionada)
+          const despesasParaInserir = []
+          const dataBase = new Date(formData.data_vencimento)
+          const diaVencimento = dataBase.getDate()
+          
+          for (let i = 0; i < 12; i++) {
+            const dataVencimento = new Date(dataBase.getFullYear(), dataBase.getMonth() + i, diaVencimento)
+            const mesAno = `${String(dataVencimento.getMonth() + 1).padStart(2, '0')}/${dataVencimento.getFullYear()}`
+            
+            const despesaMensal = {
+              ...despesaData,
+              dia_vencimento: diaVencimento,
+              data_vencimento_completa: dataVencimento.toISOString().split('T')[0],
+              observacoes: `${formData.observacoes || ''} - ${mesAno}`.trim(),
+              status: 'ativo'
+            }
+            despesasParaInserir.push(despesaMensal)
+          }
 
-        if (error) throw error
+          const { error } = await supabase
+            .from('despesas_fixas')
+            .insert(despesasParaInserir)
+            .select()
 
-        // Adicionar a nova despesa ao estado
-        if (data?.[0]) {
-          setDespesas(prevDespesas => [...prevDespesas, data[0]])
+          if (error) throw error
+
+          showAlert(`${despesasParaInserir.length} despesas mensais criadas com sucesso!`, 'success')
+        } else {
+          // Para outras periodicidades, criar apenas um registro
+          const despesaUnica = {
+            ...despesaData,
+            data_vencimento_completa: formData.data_vencimento ? formData.data_vencimento.toISOString().split('T')[0] : null,
+            status: 'ativo'
+          }
+          
+          const { error } = await supabase
+            .from('despesas_fixas')
+            .insert(despesaUnica)
+            .select()
+
+          if (error) throw error
+
+          showAlert('Despesa criada com sucesso!', 'success')
         }
-
-        showAlert('Despesa criada com sucesso!', 'success')
       }
 
       handleCloseDialog()
@@ -398,12 +486,60 @@ export default function DespesasFixas() {
           .eq('id', id)
 
         if (error) throw error
+        
         showAlert('Despesa fixa excluída com sucesso!', 'success')
         loadDespesas()
       } catch (error) {
         console.error('Erro ao excluir despesa fixa:', error)
-        showAlert('Erro ao excluir despesa fixa', 'error')
+        showAlert(`Erro ao excluir despesa fixa: ${(error as any)?.message || error}`, 'error')
       }
+    }
+  }
+
+  // Função para selecionar/deselecionar item individual
+  const handleSelectItem = (id: number) => {
+    setSelectedItems(prev => 
+      prev.includes(id) 
+        ? prev.filter(item => item !== id)
+        : [...prev, id]
+    )
+  }
+
+  // Função para selecionar/deselecionar todos os itens
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedItems([])
+    } else {
+      setSelectedItems(despesasFiltradas.map(d => d.id))
+    }
+    setSelectAll(!selectAll)
+  }
+
+  // Função para deletar itens selecionados
+  const handleBulkDelete = async () => {
+    if (selectedItems.length === 0) {
+      showAlert('Selecione pelo menos uma despesa para excluir', 'error')
+      return
+    }
+
+    const confirmMessage = `Tem certeza que deseja excluir ${selectedItems.length} despesa(s) fixa(s) selecionada(s)?`
+    if (!confirm(confirmMessage)) return
+
+    try {
+      const { error } = await supabase
+        .from('despesas_fixas')
+        .delete()
+        .in('id', selectedItems)
+
+      if (error) throw error
+      
+      showAlert(`${selectedItems.length} despesa(s) fixa(s) excluída(s) com sucesso!`, 'success')
+      setSelectedItems([])
+      setSelectAll(false)
+      loadDespesas()
+    } catch (error) {
+      console.error('Erro ao excluir despesas fixas:', error)
+      showAlert(`Erro ao excluir despesas fixas: ${(error as any)?.message || error}`, 'error')
     }
   }
 
@@ -432,11 +568,11 @@ export default function DespesasFixas() {
               .insert({
                 despesa_fixa_id: despesa.id,
                 data: dataVencimento.toISOString().split('T')[0],
-                descricao: despesa.nome,
+                descricao: despesa.credor,
                 valor: despesa.valor,
                 categoria_id: despesa.categoria_id,
                 forma_pagamento: 'Boleto',
-                observacoes: `Gerado automaticamente de: ${despesa.nome}`
+                observacoes: `Gerado automaticamente de: ${despesa.credor}`
               })
 
             if (!error) totalGerados++
@@ -477,29 +613,35 @@ export default function DespesasFixas() {
       );
     }
 
-    // Filtrar por data inicial
-    if (filtros.data_inicial) {
-      const dataInicial = new Date(filtros.data_inicial);
+    // Filtrar por data inicial e final
+    if (filtros.data_inicial || filtros.data_final) {
+      const dataInicial = filtros.data_inicial ? new Date(filtros.data_inicial) : null;
+      const dataFinal = filtros.data_final ? new Date(filtros.data_final) : null;
+      
       resultado = resultado.filter(despesa => {
-        // Converter o dia de vencimento para uma data completa do mês atual
-        const mesAtual = new Date().getMonth();
-        const anoAtual = new Date().getFullYear();
-        const dataDespesa = despesa.dia_vencimento ? 
-          new Date(anoAtual, mesAtual, parseInt(despesa.dia_vencimento.toString())) : null;
-        return dataDespesa && dataDespesa >= dataInicial;
-      });
-    }
-
-    // Filtrar por data final
-    if (filtros.data_final) {
-      const dataFinal = new Date(filtros.data_final);
-      resultado = resultado.filter(despesa => {
-        // Converter o dia de vencimento para uma data completa do mês atual
-        const mesAtual = new Date().getMonth();
-        const anoAtual = new Date().getFullYear();
-        const dataDespesa = despesa.dia_vencimento ? 
-          new Date(anoAtual, mesAtual, parseInt(despesa.dia_vencimento.toString())) : null;
-        return dataDespesa && dataDespesa <= dataFinal;
+        // Usar data_vencimento_completa se disponível, senão fallback para dia_vencimento
+        let dataDespesa = null;
+        
+        if (despesa.data_vencimento_completa) {
+          dataDespesa = new Date(despesa.data_vencimento_completa);
+        } else {
+          // Fallback para o método antigo
+          const hoje = new Date();
+          dataDespesa = new Date(hoje.getFullYear(), hoje.getMonth(), despesa.dia_vencimento);
+        }
+        
+        // Aplicar filtros
+        let passaFiltro = true;
+        
+        if (dataInicial) {
+          passaFiltro = passaFiltro && dataDespesa >= dataInicial;
+        }
+        
+        if (dataFinal) {
+          passaFiltro = passaFiltro && dataDespesa <= dataFinal;
+        }
+        
+        return passaFiltro;
       });
     }
     
@@ -508,9 +650,7 @@ export default function DespesasFixas() {
   
   // Aplicar filtros quando despesas, filtros ou showInactivas mudam
   useEffect(() => {
-    if (despesas.length > 0) {
-      aplicarFiltros();
-    }
+    aplicarFiltros();
   }, [despesas, filtros, showInactivas]);
 
   const getTotalDespesas = () => {
@@ -631,6 +771,16 @@ export default function DespesasFixas() {
         </Typography>
         
         <Box sx={{ display: 'flex', gap: 2 }}>
+          {selectedItems.length > 0 && (
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={handleBulkDelete}
+            >
+              Excluir Selecionadas ({selectedItems.length})
+            </Button>
+          )}
           
           <Button
             variant="outlined"
@@ -792,9 +942,16 @@ export default function DespesasFixas() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={selectAll}
+                        onChange={handleSelectAll}
+                        indeterminate={selectedItems.length > 0 && selectedItems.length < despesasFiltradas.length}
+                      />
+                    </TableCell>
                     <TableCell>Filial</TableCell>
                     <TableCell>Categoria</TableCell>
-                    <TableCell>Nome</TableCell>
+                    <TableCell>Credor</TableCell>
                     <TableCell>Valor</TableCell>
                     <TableCell>Periodicidade</TableCell>
                     <TableCell>Dia Vencimento</TableCell>
@@ -806,12 +963,18 @@ export default function DespesasFixas() {
                 <TableBody>
                   {despesasFiltradas.map(despesa => (
                     <TableRow key={despesa.id}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedItems.includes(despesa.id)}
+                          onChange={() => handleSelectItem(despesa.id)}
+                        />
+                      </TableCell>
                       <TableCell>{despesa.filial_nome}</TableCell>
                       <TableCell>{despesa.categoria_nome || '-'}</TableCell>
-                      <TableCell>{despesa.nome}</TableCell>
+                      <TableCell>{despesa.credor || despesa.nome || '-'}</TableCell>
                       <TableCell>{formatValor(despesa.valor)}</TableCell>
                       <TableCell>{getPeriodicidadeLabel(despesa.periodicidade)}</TableCell>
-                      <TableCell>{despesa.dia_vencimento}</TableCell>
+                      <TableCell>{formatarDataVencimento(despesa)}</TableCell>
                       <TableCell>
                         <Tooltip title={despesa.data_pagamento ? `Pago em ${formatarData(despesa.data_pagamento)}` : 'Não pago'}>
                           <IconButton size="small" color={despesa.data_pagamento ? 'success' : 'default'}>
@@ -921,6 +1084,13 @@ export default function DespesasFixas() {
                 ))}
               </Select>
             </FormControl>
+            <TextField
+              label="Credor"
+              fullWidth
+              value={formData.credor}
+              onChange={(e) => setFormData({ ...formData, credor: e.target.value })}
+              placeholder="Nome do credor/fornecedor"
+            />
             <TextField
               label="Valor"
               fullWidth

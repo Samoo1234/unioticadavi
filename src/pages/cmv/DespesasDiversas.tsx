@@ -157,7 +157,7 @@ export default function DespesasDiversas() {
       const { data, error } = await supabase
         .from('categorias')
         .select('id, nome')
-        .eq('tipo', 'categoria_diversa')
+        .in('tipo', ['diversa', 'categoria_diversa', 'categoria_despesa'])
         .order('nome')
 
       if (error) throw error

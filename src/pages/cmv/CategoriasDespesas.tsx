@@ -139,9 +139,53 @@ export default function CategoriasDespesas() {
   }
 
   const handleDeleteCategoria = async (id: number) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta categoria?')) return
-
     try {
+      // Verificar se há despesas fixas usando esta categoria
+      const { data: despesasFixas, error: errorFixas } = await supabase
+        .from('despesas_fixas')
+        .select('id')
+        .eq('categoria_id', id)
+
+      if (errorFixas) throw errorFixas
+
+      // Verificar se há despesas diversas usando esta categoria
+      const { data: despesasDiversas, error: errorDiversas } = await supabase
+        .from('despesas_diversas')
+        .select('id')
+        .eq('categoria_id', id)
+
+      if (errorDiversas) throw errorDiversas
+
+      const totalDespesas = (despesasFixas?.length || 0) + (despesasDiversas?.length || 0)
+
+      if (totalDespesas > 0) {
+        const confirmMessage = `Esta categoria possui ${totalDespesas} despesa(s) vinculada(s). Ao excluir a categoria, essas despesas ficarão sem categoria. Confirma?`
+        if (!window.confirm(confirmMessage)) return
+
+        // Remover a categoria das despesas fixas
+        if (despesasFixas && despesasFixas.length > 0) {
+          const { error: errorUpdateFixas } = await supabase
+            .from('despesas_fixas')
+            .update({ categoria_id: null })
+            .eq('categoria_id', id)
+
+          if (errorUpdateFixas) throw errorUpdateFixas
+        }
+
+        // Remover a categoria das despesas diversas
+        if (despesasDiversas && despesasDiversas.length > 0) {
+          const { error: errorUpdateDiversas } = await supabase
+            .from('despesas_diversas')
+            .update({ categoria_id: null })
+            .eq('categoria_id', id)
+
+          if (errorUpdateDiversas) throw errorUpdateDiversas
+        }
+      } else {
+        if (!window.confirm('Tem certeza que deseja excluir esta categoria?')) return
+      }
+
+      // Excluir a categoria
       const { error } = await supabase
         .from('categorias')
         .delete()

@@ -42,7 +42,7 @@ import { supabase } from '@/services/supabase'
 import { getDiaSemana, formatarData } from '@/utils/dateUtils';
 
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 interface Filial {
   id: string;
@@ -76,15 +76,21 @@ interface FormaPagamento {
 
 interface RegistroFinanceiro {
   id: string;
-  agendamento_id: number;
+  data: string;
+  cidade: string;
+  agendamento_id: string | null;
   cliente: string;
   valor: string;
-  tipo: string;
+  tipo: string; // 'receita' ou 'despesa'
+  tipo_atendimento: string; // 'particular', 'convenio', etc.
   forma_pagamento: string;
   formasPagamento?: FormaPagamento[];
   situacao: string;
   observacoes: string | null;
   data_pagamento: string | null;
+  created_at?: string;
+  updated_at?: string;
+  // Campos apenas para controle local
   novo?: boolean;
   editando?: boolean;
 }
@@ -249,13 +255,12 @@ const Financeiro: React.FC = () => {
       console.log('- Agendamentos encontrados:', agendamentosFilial);
       console.log('- IDs dos agendamentos:', agendamentoIds);
       
-      // Buscar registros financeiros dos agendamentos encontrados
-      const { data: registrosData, error: registrosError } = agendamentoIds.length > 0 
-        ? await supabase
-            .from('registros_financeiros')
-            .select('*')
-            .in('agendamento_id', agendamentoIds)
-        : { data: [], error: null };
+      // Buscar registros financeiros por data e cidade diretamente
+      const { data: registrosData, error: registrosError } = await supabase
+        .from('registros_financeiros')
+        .select('*, tipo_atendimento')
+        .eq('data', dataFormatada)
+        .eq('cidade', nomeFilial);
 
       if (registrosError) {
         console.error('Erro ao buscar registros financeiros:', registrosError);
@@ -264,10 +269,13 @@ const Financeiro: React.FC = () => {
       const registros: RegistroFinanceiro[] = registrosData?.map(registro => ({
         ...registro,
         editando: false,
-        formasPagamento: registro.formasPagamento || [{
+        agendamento_id: registro.agendamento_id || null,
+        tipo_atendimento: registro.tipo_atendimento || '',
+        valor: registro.valor?.toString() || '0,00',
+        formasPagamento: registro.formas_pagamento || [{
           id: `fp_${registro.id}_1`,
           forma_pagamento: registro.forma_pagamento || '',
-          valor: registro.valor || ''
+          valor: registro.valor?.toString() || ''
         }]
       })) || [];
       
@@ -286,10 +294,9 @@ const Financeiro: React.FC = () => {
       const agendamentosProcessados: Agendamento[] = agendamentosData || [];
       const registrosDeAgendamentos = [...registros];
 
-      agendamentosProcessados.forEach((agendamento) => {
-        const registroExistente = registros.find(r => r.agendamento_id.toString() === agendamento.id);
-
-        if (!registroExistente) {
+      // Só adicionar novos registros se não houver registros salvos
+      if (registros.length === 0) {
+        agendamentosProcessados.forEach((agendamento) => {
           const novoRegistroId = `novo_${agendamento.id}`;
           
           let nomeCliente = '';
@@ -303,10 +310,13 @@ const Financeiro: React.FC = () => {
 
           const novoRegistro: RegistroFinanceiro = {
             id: novoRegistroId,
-            agendamento_id: parseInt(agendamento.id),
+            data: dataFormatada,
+            cidade: nomeFilial,
+            agendamento_id: agendamento.id,
             cliente: nomeCliente,
             valor: agendamento.valor || '',
-            tipo: '',
+            tipo: 'receita',
+            tipo_atendimento: '',
             forma_pagamento: '',
             situacao: '',
             observacoes: '',
@@ -321,8 +331,8 @@ const Financeiro: React.FC = () => {
           };
 
           registrosDeAgendamentos.push(novoRegistro);
-        }
-      });
+        });
+      }
 
       setRegistrosFinanceiros(registrosDeAgendamentos);
       
@@ -364,7 +374,7 @@ const Financeiro: React.FC = () => {
     };
     
     for (const registro of registros) {
-      if (!registro.valor || !registro.tipo) continue;
+      if (!registro.valor || !registro.tipo_atendimento) continue;
       
       const valor = parseFloat(registro.valor.replace(',', '.'));
       if (isNaN(valor)) continue;
@@ -372,8 +382,8 @@ const Financeiro: React.FC = () => {
       stats.totalGeral += valor;
       stats.countTotal++;
       
-      // Contabilizar por tipo
-      switch (registro.tipo.toLowerCase()) {
+      // Contabilizar por tipo de atendimento
+      switch (registro.tipo_atendimento?.toLowerCase()) {
         case 'particular':
           stats.totalParticular += valor;
           stats.countParticular++;
@@ -577,16 +587,11 @@ const Financeiro: React.FC = () => {
             return fp;
           });
           
-          // Calcular valor total
-          const valorTotal = formasAtualizadas.reduce((total, fp) => {
-            const valor = parseFloat(fp.valor.replace(',', '.')) || 0;
-            return total + valor;
-          }, 0);
-          
+          // Não alterar o valor total do registro - manter o valor original
           return { 
             ...registro, 
-            formasPagamento: formasAtualizadas,
-            valor: valorTotal.toFixed(2).replace('.', ',')
+            formasPagamento: formasAtualizadas
+            // Removido: valor: valorTotal.toFixed(2).replace('.', ',')
           };
         }
         return registro;
@@ -595,6 +600,67 @@ const Financeiro: React.FC = () => {
   };
 
 
+
+  const salvarRegistro = async (registro: RegistroFinanceiro) => {
+    try {
+      setIsLoading(true);
+      
+      // Preparar dados para salvar
+      const dataObj = datas.find(d => d.id === dataSelecionada);
+      const filialSelecionada = filiais.find(f => f.id === cidadeSelecionada);
+      
+      const dadosParaSalvar = {
+        data: dataObj?.data || new Date().toISOString().split('T')[0],
+        cidade: filialSelecionada?.nome || '',
+        agendamento_id: registro.agendamento_id,
+        cliente: registro.cliente,
+        valor: parseFloat(registro.valor.replace(',', '.')),
+        tipo: 'receita', // Sempre receita para registros financeiros
+        tipo_atendimento: registro.tipo_atendimento, // Tipo específico: particular, convenio, etc.
+        forma_pagamento: registro.forma_pagamento || '',
+        formas_pagamento: registro.formasPagamento || [],
+        situacao: registro.situacao,
+        observacoes: registro.observacoes,
+        data_pagamento: new Date().toISOString()
+      };
+
+      if (registro.novo) {
+        // Inserir novo registro
+        const { error } = await supabase
+          .from('registros_financeiros')
+          .insert(dadosParaSalvar);
+
+        if (error) {
+          console.error('Erro ao inserir registro:', error);
+          setError('Erro ao salvar novo registro.');
+          return false;
+        }
+      } else {
+        // Atualizar registro existente
+        const { error } = await supabase
+          .from('registros_financeiros')
+          .update(dadosParaSalvar)
+          .eq('id', registro.id);
+
+        if (error) {
+          console.error('Erro ao atualizar registro:', error);
+          setError('Erro ao atualizar registro.');
+          return false;
+        }
+      }
+
+      // Recarregar dados após salvar
+      await buscarDados();
+      setIsLoading(false);
+      return true;
+      
+    } catch (error) {
+      console.error('Erro ao salvar registro:', error);
+      setError('Erro ao salvar registro.');
+      setIsLoading(false);
+      return false;
+    }
+  };
 
   const excluirRegistro = async (id: string) => {
     try {
@@ -618,41 +684,260 @@ const Financeiro: React.FC = () => {
   };
 
   const gerarPDF = () => {
-    if (!registrosFinanceiros || registrosFinanceiros.length === 0) {
-      alert('Não há registros financeiros para gerar o PDF.');
-      return;
+    try {
+      if (!registrosFinanceiros || registrosFinanceiros.length === 0) {
+        alert('Não há registros financeiros para gerar o PDF.');
+        return;
+      }
+      
+      console.log('Iniciando geração do PDF...');
+      
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const filialSelecionadaObj = filiais.find(filial => filial.id === cidadeSelecionada);
+      const nomeFilial = filialSelecionadaObj ? filialSelecionadaObj.nome : 'Desconhecida';
+      
+      const dataObj = datas.find(d => d.id === dataSelecionada);
+      const dataFormatada = dataObj ? formatarData(dataObj.data) : 'Data desconhecida';
+      
+      // Configurações de cores e estilos
+      const primaryColor: [number, number, number] = [25, 118, 210]; // Azul profissional
+      const secondaryColor: [number, number, number] = [117, 117, 117]; // Cinza
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      
+      // Cabeçalho profissional
+      doc.setFillColor(...primaryColor);
+      doc.rect(0, 0, pageWidth, 35, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('RELATÓRIO FINANCEIRO', pageWidth / 2, 15, { align: 'center' });
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${nomeFilial}`, pageWidth / 2, 25, { align: 'center' });
+      
+      // Informações do relatório
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      
+      let yPos = 50;
+      doc.text(`Data do Relatório: ${dataFormatada} (${diaSemana})`, 20, yPos);
+      yPos += 5;
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 20, yPos);
+      yPos += 5;
+      doc.text(`Total de Registros: ${estatisticas.countTotal}`, 20, yPos);
+      
+      // Linha separadora
+      yPos += 10;
+      doc.setDrawColor(...secondaryColor);
+      doc.line(20, yPos, pageWidth - 20, yPos);
+      
+      // Resumo Financeiro em tabela
+      yPos += 15;
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...primaryColor);
+      doc.text('RESUMO FINANCEIRO', 20, yPos);
+      
+      yPos += 10;
+      
+      // Tabela de resumo usando autoTable
+      const resumoData = [
+        ['Tipo de Atendimento', 'Valor Total', 'Quantidade'],
+        ['Particular', `R$ ${estatisticas.totalParticular.toFixed(2).replace('.', ',')}`, estatisticas.countParticular.toString()],
+        ['Convênio', `R$ ${estatisticas.totalConvenio.toFixed(2).replace('.', ',')}`, estatisticas.countConvenio.toString()],
+        ['Campanha', `R$ ${estatisticas.totalCampanha.toFixed(2).replace('.', ',')}`, estatisticas.countCampanha.toString()],
+        ['Exames', `R$ ${estatisticas.totalExames.toFixed(2).replace('.', ',')}`, estatisticas.countExames.toString()],
+        ['Revisão', `R$ ${estatisticas.totalRevisao.toFixed(2).replace('.', ',')}`, estatisticas.countRevisao.toString()]
+      ];
+      
+      autoTable(doc, {
+        head: [resumoData[0]],
+        body: resumoData.slice(1),
+        startY: yPos,
+        theme: 'grid',
+        headStyles: {
+          fillColor: primaryColor,
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 10
+        },
+        bodyStyles: {
+          fontSize: 9,
+          textColor: [0, 0, 0]
+        },
+        alternateRowStyles: {
+          fillColor: [248, 249, 250]
+        },
+        margin: { left: 20, right: 20 }
+      });
+      
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+      
+      // Total Geral destacado
+      doc.setFillColor(248, 249, 250);
+      doc.rect(20, yPos - 5, pageWidth - 40, 15, 'F');
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(20, yPos - 5, pageWidth - 40, 15, 'S');
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...primaryColor);
+      doc.text('TOTAL GERAL:', 25, yPos + 3);
+      doc.text(`R$ ${estatisticas.totalGeral.toFixed(2).replace('.', ',')}`, pageWidth - 25, yPos + 3, { align: 'right' });
+      
+      yPos += 25;
+      
+      // Formas de Pagamento
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...primaryColor);
+      doc.text('FORMAS DE PAGAMENTO', 20, yPos);
+      
+      yPos += 10;
+      
+      const pagamentoData = [
+        ['Forma de Pagamento', 'Valor Total', 'Quantidade'],
+        ['Dinheiro', `R$ ${estatisticas.totalDinheiro.toFixed(2).replace('.', ',')}`, estatisticas.countDinheiro.toString()],
+        ['Cartão', `R$ ${estatisticas.totalCartao.toFixed(2).replace('.', ',')}`, estatisticas.countCartao.toString()],
+        ['PIX', `R$ ${estatisticas.totalPix.toFixed(2).replace('.', ',')}`, estatisticas.countPix.toString()]
+      ];
+      
+      autoTable(doc, {
+        head: [pagamentoData[0]],
+        body: pagamentoData.slice(1),
+        startY: yPos,
+        theme: 'grid',
+        headStyles: {
+          fillColor: primaryColor,
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 10
+        },
+        bodyStyles: {
+          fontSize: 9,
+          textColor: [0, 0, 0]
+        },
+        alternateRowStyles: {
+          fillColor: [248, 249, 250]
+        },
+        margin: { left: 20, right: 20 }
+      });
+      
+      yPos = (doc as any).lastAutoTable.finalY + 20;
+      
+      // Verificar se precisa de nova página
+      if (yPos > pageHeight - 50) {
+        doc.addPage();
+        yPos = 30;
+      }
+      
+      // Detalhamento dos registros
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...primaryColor);
+      doc.text('DETALHAMENTO DOS REGISTROS', 20, yPos);
+      
+      yPos += 10;
+      
+      // Preparar dados para tabela de registros
+      const registrosData = [['Cliente', 'Valor', 'Tipo', 'Pagamento', 'Situação']];
+      
+      registrosFinanceiros.forEach((registro) => {
+        if (!registro.cliente || !registro.valor || !registro.tipo_atendimento) return;
+        
+        const formasPagamento = (registro.formasPagamento || [])
+          .filter(fp => fp.forma_pagamento && fp.valor)
+          .map(fp => `${fp.forma_pagamento}: R$ ${fp.valor}`)
+          .join(', ') || registro.forma_pagamento || '-';
+        
+        registrosData.push([
+          registro.cliente,
+          `R$ ${registro.valor}`,
+          registro.tipo_atendimento || '-',
+          formasPagamento,
+          registro.situacao || '-'
+        ]);
+      });
+      
+      autoTable(doc, {
+        head: [registrosData[0]],
+        body: registrosData.slice(1),
+        startY: yPos,
+        theme: 'grid',
+        headStyles: {
+          fillColor: primaryColor,
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 9
+        },
+        bodyStyles: {
+          fontSize: 8,
+          textColor: [0, 0, 0]
+        },
+        alternateRowStyles: {
+          fillColor: [248, 249, 250]
+        },
+        columnStyles: {
+          0: { cellWidth: 50 }, // Cliente
+          1: { cellWidth: 25, halign: 'right' }, // Valor
+          2: { cellWidth: 30 }, // Tipo
+          3: { cellWidth: 45 }, // Pagamento
+          4: { cellWidth: 30 } // Situação
+        },
+        margin: { left: 20, right: 20 },
+        didDrawPage: (data) => {
+          // Cabeçalho em páginas adicionais
+          if (data.pageNumber > 1) {
+            doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            doc.rect(0, 0, pageWidth, 20, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Relatório Financeiro - ${nomeFilial} (continuação)`, pageWidth / 2, 12, { align: 'center' });
+          }
+        }
+      });
+      
+      // Rodapé profissional
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        
+        // Linha do rodapé
+        doc.setDrawColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
+        doc.line(20, pageHeight - 25, pageWidth - 20, pageHeight - 25);
+        
+        // Informações do rodapé
+        doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Sistema de Gestão Ótica', 20, pageHeight - 15);
+        doc.text(`${nomeFilial}`, 20, pageHeight - 10);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 20, pageHeight - 15, { align: 'right' });
+        doc.text(new Date().toLocaleDateString('pt-BR'), pageWidth - 20, pageHeight - 10, { align: 'right' });
+      }
+      
+      console.log('PDF gerado com sucesso, iniciando download...');
+      
+      // Salvar PDF
+      const fileName = `relatorio-financeiro-${nomeFilial.replace(/\s+/g, '-')}-${dataFormatada.replace(/\//g, '-')}.pdf`;
+      doc.save(fileName);
+      
+      console.log('Download do PDF iniciado!');
+      
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      alert(`Erro ao gerar PDF: ${error}`);
     }
-    
-    const doc = new jsPDF({
-      orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4'
-    });
-    
-    const filialSelecionadaObj = filiais.find(filial => filial.id === cidadeSelecionada);
-    const nomeFilial = filialSelecionadaObj ? filialSelecionadaObj.nome : 'Desconhecida';
-    
-    const dataObj = datas.find(d => d.id === dataSelecionada);
-    const dataFormatada = dataObj ? dataObj.data : 'Data desconhecida';
-    
-    doc.setFontSize(18);
-    doc.text(`Relatório Financeiro - ${nomeFilial}`, 14, 20);
-    doc.setFontSize(14);
-    doc.text(`Data: ${dataFormatada} (${diaSemana})`, 14, 30);
-    
-    // Adicionar estatísticas
-    doc.setFontSize(12);
-    let yPos = 45;
-    doc.text(`Total Geral: R$ ${estatisticas.totalGeral.toFixed(2)}`, 14, yPos);
-    yPos += 8;
-    doc.text(`Particular: R$ ${estatisticas.totalParticular.toFixed(2)} (${estatisticas.countParticular})`, 14, yPos);
-    yPos += 6;
-    doc.text(`Convênio: R$ ${estatisticas.totalConvenio.toFixed(2)} (${estatisticas.countConvenio})`, 14, yPos);
-    yPos += 6;
-    doc.text(`Campanha: R$ ${estatisticas.totalCampanha.toFixed(2)} (${estatisticas.countCampanha})`, 14, yPos);
-    
-    // Salvar PDF
-    doc.save(`relatorio-financeiro-${nomeFilial}-${dataFormatada.replace(/\//g, '-')}.pdf`);
   };
 
   const formatarMoeda = (valor: number) => {
@@ -768,66 +1053,182 @@ const Financeiro: React.FC = () => {
       {registrosFinanceiros.length > 0 && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Estatísticas
+            <Typography variant="h6" gutterBottom sx={{ color: '#1976d2', fontWeight: 'bold' }}>
+              Resumo Financeiro
+            </Typography>
+            
+            {/* Total Geral Destacado */}
+            <Card sx={{ mb: 3, backgroundColor: '#f8f9fa', border: '2px solid #1976d2' }}>
+              <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                <Typography variant="h4" sx={{ color: '#1976d2', fontWeight: 'bold' }}>
+                  {formatarMoeda(estatisticas.totalGeral)}
+                </Typography>
+                <Typography variant="h6" color="text.secondary">
+                  Total Geral ({estatisticas.countTotal} registros)
+                </Typography>
+              </CardContent>
+            </Card>
+
+            {/* Tipos de Atendimento */}
+            <Typography variant="h6" gutterBottom sx={{ mt: 3, mb: 2, color: '#333' }}>
+              Por Tipo de Atendimento
             </Typography>
             <Grid container spacing={2}>
-              <Grid item xs={12} md={3}>
-                <Card variant="outlined">
+              <Grid item xs={12} sm={6} md={4}>
+                <Card variant="outlined" sx={{ height: '100%' }}>
                   <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
-                      Total Geral
-                    </Typography>
-                    <Typography variant="h5">
-                      {formatarMoeda(estatisticas.totalGeral)}
-                    </Typography>
-                    <Typography variant="body2">
-                      {estatisticas.countTotal} registros
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
+                    <Typography color="text.secondary" gutterBottom sx={{ fontSize: '0.9rem' }}>
                       Particular
                     </Typography>
-                    <Typography variant="h6">
+                    <Typography variant="h6" sx={{ color: '#2e7d32', fontWeight: 'bold' }}>
                       {formatarMoeda(estatisticas.totalParticular)}
                     </Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" color="text.secondary">
                       {estatisticas.countParticular} registros
                     </Typography>
+                    <Typography variant="caption" sx={{ color: '#666' }}>
+                      {estatisticas.totalGeral > 0 ? 
+                        `${((estatisticas.totalParticular / estatisticas.totalGeral) * 100).toFixed(1)}%` : '0%'}
+                    </Typography>
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={12} md={3}>
-                <Card variant="outlined">
+              <Grid item xs={12} sm={6} md={4}>
+                <Card variant="outlined" sx={{ height: '100%' }}>
                   <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
+                    <Typography color="text.secondary" gutterBottom sx={{ fontSize: '0.9rem' }}>
                       Convênio
                     </Typography>
-                    <Typography variant="h6">
+                    <Typography variant="h6" sx={{ color: '#1976d2', fontWeight: 'bold' }}>
                       {formatarMoeda(estatisticas.totalConvenio)}
                     </Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" color="text.secondary">
                       {estatisticas.countConvenio} registros
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#666' }}>
+                      {estatisticas.totalGeral > 0 ? 
+                        `${((estatisticas.totalConvenio / estatisticas.totalGeral) * 100).toFixed(1)}%` : '0%'}
                     </Typography>
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={12} md={3}>
-                <Card variant="outlined">
+              <Grid item xs={12} sm={6} md={4}>
+                <Card variant="outlined" sx={{ height: '100%' }}>
                   <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
+                    <Typography color="text.secondary" gutterBottom sx={{ fontSize: '0.9rem' }}>
                       Campanha
                     </Typography>
-                    <Typography variant="h6">
+                    <Typography variant="h6" sx={{ color: '#ed6c02', fontWeight: 'bold' }}>
                       {formatarMoeda(estatisticas.totalCampanha)}
                     </Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" color="text.secondary">
                       {estatisticas.countCampanha} registros
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#666' }}>
+                      {estatisticas.totalGeral > 0 ? 
+                        `${((estatisticas.totalCampanha / estatisticas.totalGeral) * 100).toFixed(1)}%` : '0%'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Card variant="outlined" sx={{ height: '100%' }}>
+                  <CardContent>
+                    <Typography color="text.secondary" gutterBottom sx={{ fontSize: '0.9rem' }}>
+                      Exames
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 'bold' }}>
+                      {formatarMoeda(estatisticas.totalExames)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {estatisticas.countExames} registros
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#666' }}>
+                      {estatisticas.totalGeral > 0 ? 
+                        `${((estatisticas.totalExames / estatisticas.totalGeral) * 100).toFixed(1)}%` : '0%'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Card variant="outlined" sx={{ height: '100%' }}>
+                  <CardContent>
+                    <Typography color="text.secondary" gutterBottom sx={{ fontSize: '0.9rem' }}>
+                      Revisão
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#d32f2f', fontWeight: 'bold' }}>
+                      {formatarMoeda(estatisticas.totalRevisao)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {estatisticas.countRevisao} registros
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#666' }}>
+                      {estatisticas.totalGeral > 0 ? 
+                        `${((estatisticas.totalRevisao / estatisticas.totalGeral) * 100).toFixed(1)}%` : '0%'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+
+            {/* Formas de Pagamento */}
+            <Typography variant="h6" gutterBottom sx={{ mt: 4, mb: 2, color: '#333' }}>
+              Por Forma de Pagamento
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={4}>
+                <Card variant="outlined" sx={{ height: '100%', backgroundColor: '#f8f9fa' }}>
+                  <CardContent>
+                    <Typography color="text.secondary" gutterBottom sx={{ fontSize: '0.9rem' }}>
+                      💵 Dinheiro
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#2e7d32', fontWeight: 'bold' }}>
+                      {formatarMoeda(estatisticas.totalDinheiro)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {estatisticas.countDinheiro} transações
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#666' }}>
+                      {estatisticas.totalGeral > 0 ? 
+                        `${((estatisticas.totalDinheiro / estatisticas.totalGeral) * 100).toFixed(1)}%` : '0%'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Card variant="outlined" sx={{ height: '100%', backgroundColor: '#f8f9fa' }}>
+                  <CardContent>
+                    <Typography color="text.secondary" gutterBottom sx={{ fontSize: '0.9rem' }}>
+                      💳 Cartão
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#1976d2', fontWeight: 'bold' }}>
+                      {formatarMoeda(estatisticas.totalCartao)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {estatisticas.countCartao} transações
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#666' }}>
+                      {estatisticas.totalGeral > 0 ? 
+                        `${((estatisticas.totalCartao / estatisticas.totalGeral) * 100).toFixed(1)}%` : '0%'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Card variant="outlined" sx={{ height: '100%', backgroundColor: '#f8f9fa' }}>
+                  <CardContent>
+                    <Typography color="text.secondary" gutterBottom sx={{ fontSize: '0.9rem' }}>
+                      📱 PIX
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#ed6c02', fontWeight: 'bold' }}>
+                      {formatarMoeda(estatisticas.totalPix)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {estatisticas.countPix} transações
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#666' }}>
+                      {estatisticas.totalGeral > 0 ? 
+                        `${((estatisticas.totalPix / estatisticas.totalGeral) * 100).toFixed(1)}%` : '0%'}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -978,7 +1379,7 @@ const Financeiro: React.FC = () => {
                             />
                           ) : (
                             <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.7rem' }}>
-                              {registro.cliente}
+                              {registro.cliente || 'Nome não informado'}
                             </Typography>
                           )}
                         </TableCell>
@@ -1003,7 +1404,7 @@ const Financeiro: React.FC = () => {
                             />
                           ) : (
                             <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.7rem' }}>
-                              R$ {registro.valor}
+                              R$ {registro.valor || '0,00'}
                             </Typography>
                           )}
                         </TableCell>
@@ -1011,8 +1412,8 @@ const Financeiro: React.FC = () => {
                           {registro.editando ? (
                             <FormControl fullWidth size="small">
                                 <Select
-                                  value={registro.tipo}
-                                  onChange={(e) => handleChangeRegistro(registro.id, 'tipo', e.target.value)}
+                                  value={registro.tipo_atendimento}
+                                  onChange={(e) => handleChangeRegistro(registro.id, 'tipo_atendimento', e.target.value)}
                                   size="small"
                                   fullWidth
                                   variant="outlined"
@@ -1031,18 +1432,18 @@ const Financeiro: React.FC = () => {
                               </FormControl>
                             ) : (
                               <Chip 
-                                label={registro.tipo} 
+                                label={registro.tipo_atendimento || 'Não definido'} 
                                 size="small" 
+                                variant="outlined"
                                 sx={{
-                                  background: 'linear-gradient(45deg, #667eea 30%, #764ba2 90%)',
-                                  color: 'white',
-                                  fontWeight: 600,
+                                  backgroundColor: registro.tipo_atendimento ? '#f5f5f5' : '#fafafa',
+                                  borderColor: registro.tipo_atendimento ? '#666' : '#ccc',
+                                  color: registro.tipo_atendimento ? '#333' : '#999',
+                                  fontWeight: 500,
                                   fontSize: '0.7rem',
                                   textTransform: 'capitalize',
-                                  boxShadow: '0 2px 4px rgba(102, 126, 234, 0.3)',
                                   '&:hover': {
-                                    transform: 'scale(1.05)',
-                                    transition: 'all 0.2s ease-in-out'
+                                    backgroundColor: registro.tipo_atendimento ? '#eeeeee' : '#f0f0f0'
                                   }
                                 }}
                               />
@@ -1104,20 +1505,22 @@ const Financeiro: React.FC = () => {
                                     </Grid>
                                     <Grid item xs={2} sx={{ textAlign: 'center' }}>
                                       <Tooltip title="Remover forma de pagamento">
-                                        <IconButton
-                                          size="small"
-                                          color="error"
-                                          onClick={() => removerFormaPagamento(registro.id, forma.id)}
-                                          disabled={(registro.formasPagamento || []).length <= 1}
-                                          sx={{
-                                            backgroundColor: '#ffebee',
-                                            '&:hover': {
-                                              backgroundColor: '#ffcdd2'
-                                            }
-                                          }}
-                                        >
-                                          <RemoveIcon fontSize="small" />
-                                        </IconButton>
+                                        <span>
+                                          <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => removerFormaPagamento(registro.id, forma.id)}
+                                            disabled={(registro.formasPagamento || []).length <= 1}
+                                            sx={{
+                                              backgroundColor: '#ffebee',
+                                              '&:hover': {
+                                                backgroundColor: '#ffcdd2'
+                                              }
+                                            }}
+                                          >
+                                            <RemoveIcon fontSize="small" />
+                                          </IconButton>
+                                        </span>
                                       </Tooltip>
                                     </Grid>
                                   </Grid>
@@ -1156,17 +1559,20 @@ const Financeiro: React.FC = () => {
                                   mr: 0.3
                                 }}>
                                   <Chip 
-                                    label={`${forma.forma_pagamento}: R$ ${forma.valor}`} 
+                                    label={forma.forma_pagamento && forma.valor 
+                                      ? `${forma.forma_pagamento}: R$ ${forma.valor}` 
+                                      : 'Não definido'
+                                    } 
                                     size="small" 
+                                    variant="outlined"
                                     sx={{
-                                      background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
-                                      color: 'white',
+                                      backgroundColor: forma.forma_pagamento && forma.valor ? '#f8f9fa' : '#fafafa',
+                                      borderColor: forma.forma_pagamento && forma.valor ? '#28a745' : '#ccc',
+                                      color: forma.forma_pagamento && forma.valor ? '#155724' : '#999',
                                       fontWeight: 500,
-                                      boxShadow: '0 1px 3px rgba(76, 175, 80, 0.3)',
-                                      border: 'none',
+                                      fontSize: '0.65rem',
                                       '&:hover': {
-                                        transform: 'scale(1.02)',
-                                        transition: 'all 0.2s ease-in-out'
+                                        backgroundColor: forma.forma_pagamento && forma.valor ? '#e8f5e8' : '#f0f0f0'
                                       }
                                     }}
                                   />
@@ -1199,21 +1605,42 @@ const Financeiro: React.FC = () => {
                               </FormControl>
                             ) : (
                               <Chip 
-                                label={registro.situacao} 
+                                label={registro.situacao || 'Não definido'} 
                                 size="small"
+                                variant="outlined"
                                 sx={{
-                                  background: registro.situacao === 'efetivacao' 
-                                    ? 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)'
+                                  backgroundColor: registro.situacao === 'efetivacao' 
+                                    ? '#f8f9fa'
                                     : registro.situacao === 'caso_clinico'
-                                    ? 'linear-gradient(45deg, #ff9800 30%, #ffb74d 90%)'
-                                    : 'linear-gradient(45deg, #f44336 30%, #ef5350 90%)',
-                                  color: 'white',
-                                  fontWeight: 600,
+                                    ? '#fff8e1'
+                                    : registro.situacao === 'perda'
+                                    ? '#ffebee'
+                                    : '#fafafa',
+                                  borderColor: registro.situacao === 'efetivacao' 
+                                    ? '#28a745'
+                                    : registro.situacao === 'caso_clinico'
+                                    ? '#ff9800'
+                                    : registro.situacao === 'perda'
+                                    ? '#dc3545'
+                                    : '#ccc',
+                                  color: registro.situacao === 'efetivacao' 
+                                    ? '#155724'
+                                    : registro.situacao === 'caso_clinico'
+                                    ? '#e65100'
+                                    : registro.situacao === 'perda'
+                                    ? '#721c24'
+                                    : '#999',
+                                  fontWeight: 500,
+                                  fontSize: '0.7rem',
                                   textTransform: 'capitalize',
-                                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                                   '&:hover': {
-                                    transform: 'scale(1.05)',
-                                    transition: 'all 0.2s ease-in-out'
+                                    backgroundColor: registro.situacao === 'efetivacao' 
+                                      ? '#e8f5e8'
+                                      : registro.situacao === 'caso_clinico'
+                                      ? '#fff3e0'
+                                      : registro.situacao === 'perda'
+                                      ? '#f5c6cb'
+                                      : '#f0f0f0'
                                   }
                                 }}
                               />
@@ -1252,20 +1679,21 @@ const Financeiro: React.FC = () => {
                                   <Tooltip title="Salvar">
                                     <IconButton
                                       size="small"
-                                      onClick={() => {
-                                        setRegistrosFinanceiros(prev => 
-                                          prev.map(r => r.id === registro.id ? { ...r, editando: false } : r)
-                                        );
+                                      onClick={async () => {
+                                        const sucesso = await salvarRegistro(registro);
+                                        if (sucesso) {
+                                          setRegistrosFinanceiros(prev => 
+                                            prev.map(r => r.id === registro.id ? { ...r, editando: false } : r)
+                                          );
+                                        }
                                       }}
                                       sx={{
-                                        background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
+                                        backgroundColor: '#28a745',
                                         color: 'white',
                                         '&:hover': {
-                                          background: 'linear-gradient(45deg, #388e3c 30%, #4caf50 90%)',
-                                          transform: 'scale(1.1)'
+                                          backgroundColor: '#218838'
                                         },
-                                        transition: 'all 0.2s ease-in-out',
-                                        boxShadow: '0 2px 4px rgba(76, 175, 80, 0.3)'
+                                        transition: 'background-color 0.2s ease-in-out'
                                       }}
                                     >
                                       <SaveIcon fontSize="small" />
@@ -1275,19 +1703,16 @@ const Financeiro: React.FC = () => {
                                     <IconButton
                                       size="small"
                                       onClick={() => {
-                                        setRegistrosFinanceiros(prev => 
-                                          prev.map(r => r.id === registro.id ? { ...r, editando: false } : r)
-                                        );
+                                        // Recarregar dados para cancelar alterações
+                                        buscarDados();
                                       }}
                                       sx={{
-                                        background: 'linear-gradient(45deg, #ff9800 30%, #ffb74d 90%)',
+                                        backgroundColor: '#6c757d',
                                         color: 'white',
                                         '&:hover': {
-                                          background: 'linear-gradient(45deg, #f57c00 30%, #ff9800 90%)',
-                                          transform: 'scale(1.1)'
+                                          backgroundColor: '#5a6268'
                                         },
-                                        transition: 'all 0.2s ease-in-out',
-                                        boxShadow: '0 2px 4px rgba(255, 152, 0, 0.3)'
+                                        transition: 'background-color 0.2s ease-in-out'
                                       }}
                                     >
                                       <CancelIcon fontSize="small" />
@@ -1305,14 +1730,12 @@ const Financeiro: React.FC = () => {
                                         );
                                       }}
                                       sx={{
-                                        background: 'linear-gradient(45deg, #2196f3 30%, #64b5f6 90%)',
+                                        backgroundColor: '#007bff',
                                         color: 'white',
                                         '&:hover': {
-                                          background: 'linear-gradient(45deg, #1976d2 30%, #2196f3 90%)',
-                                          transform: 'scale(1.1)'
+                                          backgroundColor: '#0056b3'
                                         },
-                                        transition: 'all 0.2s ease-in-out',
-                                        boxShadow: '0 2px 4px rgba(33, 150, 243, 0.3)'
+                                        transition: 'background-color 0.2s ease-in-out'
                                       }}
                                     >
                                       <EditIcon fontSize="small" />
@@ -1327,14 +1750,12 @@ const Financeiro: React.FC = () => {
                                         }
                                       }}
                                       sx={{
-                                        background: 'linear-gradient(45deg, #f44336 30%, #ef5350 90%)',
+                                        backgroundColor: '#dc3545',
                                         color: 'white',
                                         '&:hover': {
-                                          background: 'linear-gradient(45deg, #d32f2f 30%, #f44336 90%)',
-                                          transform: 'scale(1.1)'
+                                          backgroundColor: '#c82333'
                                         },
-                                        transition: 'all 0.2s ease-in-out',
-                                        boxShadow: '0 2px 4px rgba(244, 67, 54, 0.3)'
+                                        transition: 'background-color 0.2s ease-in-out'
                                       }}
                                     >
                                       <DeleteIcon fontSize="small" />

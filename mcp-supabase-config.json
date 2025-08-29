@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "node",
+      "args": ["mcp-supabase-server.js"],
+      "env": {
+        "SUPABASE_URL": "https://dmsaqxuoruinwpnonpky.supabase.co",
+        "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtc2FxeHVvcnVpbndwbm9ucGt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5MzQyNTYsImV4cCI6MjA2ODUxMDI1Nn0.qgUE3Lpn5-dgphbW6k59Pu4M-xkwpI6KtAYR7m5FkdU"
+      },
+      "description": "Servidor MCP para Supabase - Gestão Ótica",
+      "tools": [
+        "execute_sql",
+        "list_tables", 
+        "describe_table",
+        "add_credor_field"
+      ]
+    }
+  },
+  "instructions": {
+    "setup": [
+      "1. Adicione o campo credor no Supabase Dashboard:",
+      "   ALTER TABLE public.despesas_fixas ADD COLUMN IF NOT EXISTS credor VARCHAR(255);",
+      "2. Configure este arquivo no seu cliente MCP",
+      "3. Reinicie o cliente MCP"
+    ],
+    "dashboard_url": "https://supabase.com/dashboard/project/dmsaqxuoruinwpnonpky/sql"
+  }
+}
