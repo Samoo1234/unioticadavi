@@ -39,15 +39,11 @@ import {
 } from '@mui/icons-material'
 import { supabase } from '../../services/supabase'
 
-// Função utilitária para formatação de data
+import { formatarData } from '@/utils/dateUtils'
+
+// Função utilitária para formatação de data - usando a função padronizada
 const formatDateToBrazilian = (dateString: string) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  return date.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  })
+  return formatarData(dateString)
 }
 
 interface Titulo {
@@ -98,7 +94,11 @@ const EmissaoTitulos: React.FC = () => {
   // Estados para o modal de pagamento
   const [modalPagamento, setModalPagamento] = useState(false)
   const [tituloSelecionado, setTituloSelecionado] = useState<number | null>(null)
-  const [dataPagamento, setDataPagamento] = useState(new Date().toISOString().slice(0, 10))
+  const [dataPagamento, setDataPagamento] = useState(() => {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0); // Zerar horário para evitar problemas de timezone
+    return hoje.toISOString().slice(0, 10);
+  })
   const [multa, setMulta] = useState<string>('0')
   const [juros, setJuros] = useState<string>('0')
   
@@ -567,7 +567,9 @@ const EmissaoTitulos: React.FC = () => {
   const handlePagar = (id: number) => {
     // Em vez de processar o pagamento imediatamente, abrimos o modal
     setTituloSelecionado(id)
-    setDataPagamento(new Date().toISOString().slice(0, 10))
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0); // Zerar horário para evitar problemas de timezone
+    setDataPagamento(hoje.toISOString().slice(0, 10))
     setMulta('0')
     setJuros('0')
     setModalPagamento(true)

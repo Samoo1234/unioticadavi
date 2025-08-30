@@ -330,13 +330,26 @@ const Titulos: React.FC = () => {
         return;
       }
     }
-    if (!form.filial_id || !form.fornecedor_id || !form.vencimento || !form.valor || isNaN(parseFloat(form.valor))) {
-      setAlert({
-        open: true,
-        message: 'Preencha todos os campos obrigatórios.',
-        severity: 'warning'
-      });
-      return;
+    // Validação para título único
+    if (!multiplosTitulos) {
+      if (!form.filial_id || !form.fornecedor_id || !form.vencimento || !form.valor || isNaN(parseFloat(form.valor))) {
+        setAlert({
+          open: true,
+          message: 'Preencha todos os campos obrigatórios.',
+          severity: 'warning'
+        });
+        return;
+      }
+    } else {
+      // Validação para múltiplos títulos - apenas filial e fornecedor são obrigatórios no form principal
+      if (!form.filial_id || !form.fornecedor_id) {
+        setAlert({
+          open: true,
+          message: 'Selecione filial e fornecedor.',
+          severity: 'warning'
+        });
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -403,10 +416,10 @@ const Titulos: React.FC = () => {
           fornecedor_id: form.fornecedor_id,
           filial_id: form.filial_id,
           tipo_id: fornecedorSelecionado.tipo_id,
-          valor: parseFloat(form.valor),
+          valor: parseFloat(form.valor || '0'),
           data_vencimento: form.vencimento || '',
           status: 'pendente' as const,
-          observacao: form.observacoes || undefined,
+          observacoes: form.observacoes || '',
           tipo: 'pagar'
         };
 
@@ -474,13 +487,13 @@ const Titulos: React.FC = () => {
             const tituloData = {
               fornecedor_id: form.fornecedor_id,
               filial_id: form.filial_id,
-              numero: numeroTitulo,
+              numero: numeroTitulo.toString(),
               tipo_id: fornecedorSelecionado.tipo_id, // Adicionar tipo_id do fornecedor
               tipo: 'pagar', // Usar valor válido para a constraint valid_tipo
               data_vencimento: item.vencimento,
               valor: parseFloat(item.valor),
               status: 'pendente' as const,
-              observacao: form.observacoes || ''
+              observacoes: form.observacoes || ''
             };
             
             const { data: tituloCriado, error } = await supabase
@@ -536,14 +549,14 @@ const Titulos: React.FC = () => {
         const proximoNumero = await getProximoNumero();
         
         const tituloData = {
-          numero: proximoNumero,
+          numero: proximoNumero.toString(),
           fornecedor_id: form.fornecedor_id,
           filial_id: form.filial_id,
           tipo_id: fornecedorSelecionado.tipo_id,
-          valor: parseFloat(form.valor),
+          valor: parseFloat(form.valor || '0'),
           data_vencimento: form.vencimento || '',
           status: 'pendente' as const,
-          observacao: form.observacoes || undefined,
+          observacoes: form.observacoes || '',
           tipo: 'pagar'
         };
 
@@ -775,7 +788,8 @@ const Titulos: React.FC = () => {
                       value={form.vencimento ? dayjs(form.vencimento) : null}
                       onChange={(novaData) => {
                         if (novaData) {
-                          const dataFormatada = novaData.format('YYYY-MM-DD')
+                          // Usar startOf('day') para evitar problemas de timezone
+                          const dataFormatada = novaData.startOf('day').format('YYYY-MM-DD')
                           setForm(prev => ({ ...prev, vencimento: dataFormatada }))
                         } else {
                           setForm(prev => ({ ...prev, vencimento: '' }))
@@ -824,7 +838,8 @@ const Titulos: React.FC = () => {
                             value={item.vencimento ? dayjs(item.vencimento) : null}
                             onChange={(novaData) => {
                               if (novaData) {
-                                const dataISO = novaData.format('YYYY-MM-DD')
+                                // Usar startOf('day') para evitar problemas de timezone
+                                const dataISO = novaData.startOf('day').format('YYYY-MM-DD')
                                 handleItemTituloChange(index, 'vencimento', dataISO)
                               } else {
                                 handleItemTituloChange(index, 'vencimento', '')
@@ -841,11 +856,17 @@ const Titulos: React.FC = () => {
                           />
                           <TextField
                             label="Valor"
-                            type="number"
-                            value={item.valor}
-                            onChange={(e) => handleItemTituloChange(index, 'valor', e.target.value)}
+                            type="text"
+                            value={item.valor ? formatarValorMonetario((parseFloat(item.valor) * 100).toString()) : ''}
+                            onChange={(e) => {
+                              const valorFormatado = formatarValorMonetario(e.target.value);
+                              const valorNumerico = obterValorNumerico(e.target.value);
+                              handleItemTituloChange(index, 'valor', valorNumerico);
+                              e.target.value = valorFormatado;
+                            }}
                             fullWidth
                             required
+                            placeholder="R$ 0,00"
                           />
                         </Box>
                       </Box>
