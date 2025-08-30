@@ -543,53 +543,6 @@ export default function DespesasFixas() {
     }
   }
 
-  const handleGenerateVencimentos = async () => {
-    try {
-      const despesasAtivas = despesas.filter(d => d.status === 'ativo')
-      let totalGerados = 0
-      
-      for (const despesa of despesasAtivas) {
-        // Gerar vencimentos dos próximos 3 meses
-        const hoje = new Date()
-        for (let i = 0; i < 3; i++) {
-          const dataVencimento = new Date(hoje.getFullYear(), hoje.getMonth() + i, despesa.dia_vencimento)
-          
-          // Verificar se já existe um vencimento para esta data
-          const { data: existente } = await supabase
-            .from('despesas_diversas')
-            .select('id')
-            .eq('despesa_fixa_id', despesa.id)
-            .eq('data', dataVencimento.toISOString().split('T')[0])
-            .single()
-
-          if (!existente) {
-            const { error } = await supabase
-              .from('despesas_diversas')
-              .insert({
-                despesa_fixa_id: despesa.id,
-                data: dataVencimento.toISOString().split('T')[0],
-                descricao: despesa.credor,
-                valor: despesa.valor,
-                categoria_id: despesa.categoria_id,
-                forma_pagamento: 'Boleto',
-                observacoes: `Gerado automaticamente de: ${despesa.credor}`
-              })
-
-            if (!error) totalGerados++
-          }
-        }
-      }
-      
-      if (totalGerados > 0) {
-        showAlert(`${totalGerados} vencimentos gerados com sucesso!`, 'success')
-      } else {
-        showAlert('Nenhum vencimento gerado (podem já existir)', 'success')
-      }
-    } catch (error) {
-      console.error('Erro ao gerar vencimentos:', error)
-      showAlert('Erro ao gerar vencimentos', 'error')
-    }
-  }
 
   const aplicarFiltros = () => {
     let resultado = [...despesas];
@@ -781,14 +734,6 @@ export default function DespesasFixas() {
               Excluir Selecionadas ({selectedItems.length})
             </Button>
           )}
-          
-          <Button
-            variant="outlined"
-            startIcon={<CalendarIcon />}
-            onClick={handleGenerateVencimentos}
-          >
-            Gerar Vencimentos
-          </Button>
           
           <Button
             variant="contained"
