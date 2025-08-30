@@ -479,12 +479,12 @@ const CustoOS: React.FC = () => {
                 </TextField>
                 
                 <TextField
-                  label="Nº TCO"
+                  label="Nº TSO"
                   name="numeroTco"
                   value={form.numeroTco || ''}
                   onChange={handleChange}
                   fullWidth
-                  placeholder="Digite o número do TCO"
+                  placeholder="Digite o número do TSO"
                 />
                 
                 <Button 
@@ -518,7 +518,7 @@ const CustoOS: React.FC = () => {
                         <>
                           <span>{`Venda: ${formatarMoeda(os.valor_venda)} | Lentes: ${formatarMoeda(os.custo_lentes)} | Armação: ${formatarMoeda(os.custo_armacoes)} | MKT: ${formatarMoeda(os.custo_mkt)} | Outros: ${formatarMoeda(os.outros_custos)}`}</span>
                           <span style={{ display: 'block', marginTop: 4, fontSize: '0.875rem', color: '#666' }}>
-                            {`Médico: ${getNomeMedico(os.medico_id)}${os.numero_tco ? ` | TCO: ${os.numero_tco}` : ''}`}
+                            {`Médico: ${getNomeMedico(os.medico_id)}${os.numero_tco ? ` | TSO: ${os.numero_tco}` : ''}`}
                           </span>
                         </>
                       }

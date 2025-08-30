@@ -183,7 +183,7 @@ export default function ExtratoDespesas() {
         .from('despesas_fixas')
         .select(`
           id,
-          nome,
+          credor,
           valor,
           categoria_id,
           forma_pagamento,
@@ -289,7 +289,7 @@ export default function ExtratoDespesas() {
       // Formatar despesas fixas
       const formattedFixas = despesasFixas?.map(item => ({
         id: item.id,
-        descricao: item.nome || 'Sem descrição',
+        descricao: item.credor || 'Sem descrição',
         valor: item.valor,
         data_pagamento: '-', // Despesas fixas não têm data de pagamento específica
         categoria_id: item.categoria_id,
