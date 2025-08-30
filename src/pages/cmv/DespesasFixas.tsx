@@ -45,7 +45,6 @@ import {
   Block as BlockIcon, 
   Delete as DeleteIcon, 
   CheckCircle as CheckCircleIcon, 
-  CalendarMonth as CalendarIcon, 
   Pending as PendingIcon, 
   Payments as PaymentIcon, 
   AttachFile as AttachFileIcon
