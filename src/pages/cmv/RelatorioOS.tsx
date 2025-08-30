@@ -389,7 +389,7 @@ const RelatorioOS: React.FC = () => {
           os.numero_tco?.substring(0, 8) || '-'
         ])
         
-        drawTable(doc, ['Data', 'Filial', 'Venda', 'Lentes', 'Armação', 'MKT', 'Outros', 'Médico', 'TCO'], osData, yPosition, 'Detalhes das OS')
+        drawTable(doc, ['Data', 'Filial', 'Venda', 'Lentes', 'Armação', 'MKT', 'Outros', 'Médico', 'TSO'], osData, yPosition, 'Detalhes das OS')
       }
       
       const nomeArquivo = `relatorio-os-${new Date().toISOString().slice(0, 10)}.pdf`
@@ -521,7 +521,7 @@ const RelatorioOS: React.FC = () => {
                       <>
                         <div>{`Venda: R$ ${os.valorVenda.toFixed(2)} | Lentes: R$ ${os.custoLentes.toFixed(2)} | Armação: R$ ${os.custoArmacoes.toFixed(2)} | MKT: R$ ${os.custoMkt.toFixed(2)} | Outros: R$ ${os.outrosCustos.toFixed(2)}`}</div>
                         <div style={{ marginTop: '4px', fontSize: '0.875rem', color: '#666' }}>
-                          {`Médico: ${getNomeMedico(os.medico_id)}${os.numero_tco ? ` | TCO: ${os.numero_tco}` : ''}`}
+                          {`Médico: ${getNomeMedico(os.medico_id)}${os.numero_tco ? ` | TSO: ${os.numero_tco}` : ''}`}
                         </div>
                       </>
                     }

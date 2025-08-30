@@ -141,17 +141,30 @@ const CustoOS: React.FC = () => {
     return date.toLocaleDateString('pt-BR')
   }
 
-  const arredondarDuasCasas = (valor: string | number) => {
-    const num = typeof valor === 'string' ? parseFloat(valor.replace(',', '.')) : valor
-    if (isNaN(num)) return ''
-    return (Math.round(num * 100) / 100).toFixed(2)
+
+  // Função para formatar valor como moeda brasileira
+  const formatarMoedaInput = (valor: string) => {
+    // Remove tudo que não é dígito
+    const apenasNumeros = valor.replace(/\D/g, '')
+    // Converte para centavos
+    const valorCentavos = parseInt(apenasNumeros) || 0
+    // Formata como moeda
+    return (valorCentavos / 100).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    })
+  }
+
+  // Função para converter valor formatado para número
+  const converterMoedaParaNumero = (valorFormatado: string) => {
+    return parseFloat(valorFormatado.replace(/[R$\s.]/g, '').replace(',', '.')) || 0
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const camposMonetarios = ['valorVenda', 'custoLentes', 'custoArmacoes', 'custoMkt', 'outrosCustos']
     if (camposMonetarios.includes(e.target.name)) {
-      let valor = e.target.value.replace(',', '.')
-      if (/^\d*(\.\d{0,2})?$/.test(valor)) setForm({ ...form, [e.target.name]: valor })
+      const valorFormatado = formatarMoedaInput(e.target.value)
+      setForm({ ...form, [e.target.name]: valorFormatado })
     } else {
       setForm({ ...form, [e.target.name]: e.target.value })
     }
@@ -181,11 +194,11 @@ const CustoOS: React.FC = () => {
       const custoOSData = {
         filial_id: form.filial_id!,
         data: form.data,
-        valor_venda: parseFloat(arredondarDuasCasas(form.valorVenda || '0')),
-        custo_lentes: parseFloat(arredondarDuasCasas(form.custoLentes || '0')),
-        custo_armacoes: parseFloat(arredondarDuasCasas(form.custoArmacoes || '0')),
-        custo_mkt: parseFloat(arredondarDuasCasas(form.custoMkt || '0')),
-        outros_custos: parseFloat(arredondarDuasCasas(form.outrosCustos || '0')),
+        valor_venda: converterMoedaParaNumero(form.valorVenda || 'R$ 0,00'),
+        custo_lentes: converterMoedaParaNumero(form.custoLentes || 'R$ 0,00'),
+        custo_armacoes: converterMoedaParaNumero(form.custoArmacoes || 'R$ 0,00'),
+        custo_mkt: converterMoedaParaNumero(form.custoMkt || 'R$ 0,00'),
+        outros_custos: converterMoedaParaNumero(form.outrosCustos || 'R$ 0,00'),
         medico_id: form.medico_id || null,
         numero_tco: form.numeroTco || null
       }
@@ -248,11 +261,11 @@ const CustoOS: React.FC = () => {
         filial: filial?.nome || '',
         filial_id: os.filial_id,
         data: os.data,
-        valorVenda: os.valor_venda.toString(),
-        custoLentes: os.custo_lentes.toString(),
-        custoArmacoes: os.custo_armacoes.toString(),
-        custoMkt: os.custo_mkt.toString(),
-        outrosCustos: os.outros_custos.toString(),
+        valorVenda: formatarMoeda(os.valor_venda),
+        custoLentes: formatarMoeda(os.custo_lentes),
+        custoArmacoes: formatarMoeda(os.custo_armacoes),
+        custoMkt: formatarMoeda(os.custo_mkt),
+        outrosCustos: formatarMoeda(os.outros_custos),
         medico: medico?.nome || '',
         medico_id: os.medico_id,
         numeroTco: os.numero_tco || ''
@@ -407,8 +420,7 @@ const CustoOS: React.FC = () => {
                   value={form.valorVenda || ''}
                   onChange={handleChange}
                   fullWidth
-                  type="number"
-                  inputProps={{ min: 0, step: 0.01 }}
+                  placeholder="R$ 0,00"
                 />
                 
                 <TextField
@@ -417,8 +429,7 @@ const CustoOS: React.FC = () => {
                   value={form.custoLentes || ''}
                   onChange={handleChange}
                   fullWidth
-                  type="number"
-                  inputProps={{ min: 0, step: 0.01 }}
+                  placeholder="R$ 0,00"
                 />
                 
                 <TextField
@@ -427,8 +438,7 @@ const CustoOS: React.FC = () => {
                   value={form.custoArmacoes || ''}
                   onChange={handleChange}
                   fullWidth
-                  type="number"
-                  inputProps={{ min: 0, step: 0.01 }}
+                  placeholder="R$ 0,00"
                 />
                 
                 <TextField
@@ -437,8 +447,7 @@ const CustoOS: React.FC = () => {
                   value={form.custoMkt || ''}
                   onChange={handleChange}
                   fullWidth
-                  type="number"
-                  inputProps={{ min: 0, step: 0.01 }}
+                  placeholder="R$ 0,00"
                 />
                 
                 <TextField
@@ -447,8 +456,7 @@ const CustoOS: React.FC = () => {
                   value={form.outrosCustos || ''}
                   onChange={handleChange}
                   fullWidth
-                  type="number"
-                  inputProps={{ min: 0, step: 0.01 }}
+                  placeholder="R$ 0,00"
                 />
                 
                 <TextField
