@@ -213,37 +213,44 @@ const Titulos: React.FC = () => {
     carregarDados();
   }, []);
 
+  const formatarValorMonetario = (valor: string): string => {
+    // Remove tudo que não é número
+    const numeros = valor.replace(/\D/g, '');
+    
+    if (!numeros) return '';
+    
+    // Converte para número e divide por 100 para ter centavos
+    const numeroFloat = parseFloat(numeros) / 100;
+    
+    // Formata como moeda brasileira
+    return numeroFloat.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    });
+  };
+
+  const obterValorNumerico = (valorFormatado: string): string => {
+    // Remove formatação e retorna apenas números com ponto decimal
+    const numeros = valorFormatado.replace(/\D/g, '');
+    if (!numeros) return '';
+    
+    const numeroFloat = parseFloat(numeros) / 100;
+    return numeroFloat.toString();
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     
-    // Validação especial para campo monetário
+    // Formatação especial para campo monetário
     if (name === 'valor') {
-      // Remove caracteres não numéricos exceto ponto e vírgula
-      let numericValue = value.replace(/[^0-9.,]/g, '');
+      const valorFormatado = formatarValorMonetario(value);
+      const valorNumerico = obterValorNumerico(value);
       
-      // Converte vírgula para ponto se necessário
-      numericValue = numericValue.replace(/,/g, '.');
+      // Atualiza o estado com valor numérico
+      setForm((prev) => ({ ...prev, [name]: valorNumerico }));
       
-      // Se tiver mais de um ponto, mantém apenas o último
-      if ((numericValue.match(/\./g) || []).length > 1) {
-        const parts = numericValue.split('.');
-        numericValue = parts.slice(0, -1).join('') + '.' + parts.slice(-1);
-      }
-      
-      // Limita a duas casas decimais
-      const parts = numericValue.split('.');
-      if (parts.length > 1 && parts[1].length > 2) {
-        parts[1] = parts[1].slice(0, 2);
-        numericValue = parts.join('.');
-      }
-      
-      // Formata com R$
-      const formattedValue = numericValue ? `R$ ${numericValue}` : '';
-      
-      setForm((prev) => ({ ...prev, [name]: numericValue }));
-      
-      // Atualiza o valor exibido no input
-      e.target.value = formattedValue;
+      // Atualiza o display do input com formatação
+      e.target.value = valorFormatado;
       return;
     }
     
@@ -270,21 +277,43 @@ const Titulos: React.FC = () => {
     setItensTitulos(novoItens);
   };
 
-  const getProximoNumero = async (): Promise<number> => {
+  const getProximoNumero = async (incremento: number = 0): Promise<number> => {
     try {
+      const anoAtual = new Date().getFullYear();
+      const anoString = anoAtual.toString();
+      
+      // Buscar o maior número do ano atual
       const { data, error } = await supabase
         .from('titulos')
         .select('numero')
+        .gte('numero', parseInt(`${anoString}0001`))
+        .lt('numero', parseInt(`${anoString + 1}0001`))
         .order('numero', { ascending: false })
         .limit(1);
 
       if (error) throw error;
 
-      const ultimoNumero = data && data.length > 0 ? data[0].numero : 0;
-      return ultimoNumero + 1;
+      let proximoSequencial = 1;
+      
+      if (data && data.length > 0) {
+        // Extrair apenas a parte sequencial (últimos 4 dígitos)
+        const ultimoNumero = data[0].numero;
+        const parteSequencial = ultimoNumero % 10000;
+        proximoSequencial = parteSequencial + 1;
+      }
+      
+      // Garantir que não passe de 9999 títulos por ano
+      if (proximoSequencial > 9999) {
+        throw new Error('Limite de 9999 títulos por ano atingido');
+      }
+      
+      // Formatar: AAAA + sequencial com 4 dígitos (ex: 20250001, 20250002)
+      const numeroFormatado = parseInt(`${anoString}${proximoSequencial.toString().padStart(4, '0')}`);
+      return numeroFormatado + incremento;
     } catch (error) {
       console.error('Erro ao obter próximo número:', error);
-      return 1;
+      const anoAtual = new Date().getFullYear();
+      return parseInt(`${anoAtual}0001`) + incremento;
     }
   };
 
@@ -344,9 +373,6 @@ const Titulos: React.FC = () => {
         return;
       }
       
-      // Gerar próximo número sequencial
-      const proximoNumero = await getProximoNumero();
-      
       // Buscar o objeto fornecedor para obter o tipo
       const fornecedorObj = fornecedores.find(f => f.id === form.fornecedor_id);
       if (!fornecedorObj) {
@@ -370,24 +396,24 @@ const Titulos: React.FC = () => {
         setIsLoading(false);
         return;
       }
-      
-      const tituloData = {
-        numero: proximoNumero,
-        fornecedor_id: form.fornecedor_id,
-        filial_id: form.filial_id,
-        tipo_id: fornecedorSelecionado.tipo_id, // Adicionar tipo_id do fornecedor
-        valor: parseFloat(form.valor),
-        data_vencimento: form.vencimento || '',
-        status: 'pendente' as const,
-        observacao: form.observacoes || undefined,
-        tipo: 'pagar' // Usar valor válido para a constraint valid_tipo
-      };
 
       if (editId) {
+        // Para edição, não incluir o campo 'numero' para preservar o número original
+        const tituloDataEdit = {
+          fornecedor_id: form.fornecedor_id,
+          filial_id: form.filial_id,
+          tipo_id: fornecedorSelecionado.tipo_id,
+          valor: parseFloat(form.valor),
+          data_vencimento: form.vencimento || '',
+          status: 'pendente' as const,
+          observacao: form.observacoes || undefined,
+          tipo: 'pagar'
+        };
+
         // Atualizar título existente
         const { data: updatedTitulo, error } = await supabase
           .from('titulos')
-          .update(tituloData)
+          .update(tituloDataEdit)
           .eq('id', editId)
           .select()
           .single();
@@ -432,9 +458,13 @@ const Titulos: React.FC = () => {
           // Criar títulos sequencialmente para garantir numeração correta
           const titulosCriados: Titulo[] = [];
           
-          for (const item of itensTitulos) {
-            // Gerar próximo número sequencial para cada título
-            const numeroTitulo = await getProximoNumero();
+          // Obter o número base uma única vez
+          const numeroBase = await getProximoNumero();
+          
+          for (let index = 0; index < itensTitulos.length; index++) {
+            const item = itensTitulos[index];
+            // Usar o número base + índice para garantir sequência única
+            const numeroTitulo = numeroBase + index;
             
             const fornecedorSelecionado = fornecedores.find(f => f.id === form.fornecedor_id);
             if (!fornecedorSelecionado?.tipo_id) {
@@ -502,6 +532,21 @@ const Titulos: React.FC = () => {
           });
         }
       } else {
+        // Gerar próximo número sequencial para novo título
+        const proximoNumero = await getProximoNumero();
+        
+        const tituloData = {
+          numero: proximoNumero,
+          fornecedor_id: form.fornecedor_id,
+          filial_id: form.filial_id,
+          tipo_id: fornecedorSelecionado.tipo_id,
+          valor: parseFloat(form.valor),
+          data_vencimento: form.vencimento || '',
+          status: 'pendente' as const,
+          observacao: form.observacoes || undefined,
+          tipo: 'pagar'
+        };
+
         // Criar novo título
         const { data: novoTitulo, error } = await supabase
           .from('titulos')
@@ -749,11 +794,12 @@ const Titulos: React.FC = () => {
                     <TextField
                       label="Valor"
                       name="valor"
-                      type="number"
-                      value={form.valor === '0' ? '' : form.valor || ''}
+                      type="text"
+                      value={form.valor ? formatarValorMonetario((parseFloat(form.valor) * 100).toString()) : ''}
                       onChange={handleChange}
                       fullWidth
                       required
+                      placeholder="R$ 0,00"
                     />
                   </>
                 ) : (
