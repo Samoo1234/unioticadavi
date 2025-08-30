@@ -41,6 +41,7 @@ import {
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { supabase } from '../services/supabase';
+import jsPDF from 'jspdf';
 // DatePicker removido - não usado mais no modal
 
 
@@ -567,7 +568,200 @@ export function Agendamentos() {
 
 
   const generatePDF = () => {
-    toast.info('Funcionalidade de geração de PDF será implementada em breve.');
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 20;
+      const lineHeight = 7;
+      let yPosition = margin;
+
+      // Cabeçalho da empresa
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('GESTÃO ÓTICA', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 10;
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Relatório de Agendamentos', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 15;
+
+      // Data de geração
+      const dataAtual = new Date();
+      const dataFormatada = dataAtual.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      doc.setFontSize(10);
+      doc.text(`Gerado em: ${dataFormatada}`, margin, yPosition);
+      yPosition += 10;
+
+      // Filtros aplicados
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Filtros Aplicados:', margin, yPosition);
+      yPosition += 8;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      
+      if (cityFilter) {
+        doc.text(`• Filial: ${cityFilter}`, margin + 5, yPosition);
+        yPosition += 6;
+      }
+      
+      if (dateFilter) {
+        const dataFiltro = new Date(dateFilter + 'T00:00:00').toLocaleDateString('pt-BR');
+        doc.text(`• Data: ${dataFiltro}`, margin + 5, yPosition);
+        yPosition += 6;
+      }
+      
+      if (statusFilter) {
+        const statusTexto = statusFilter === 'pendente' ? 'Pendente' : 
+                           statusFilter === 'confirmado' ? 'Confirmado' : 'Cancelado';
+        doc.text(`• Status: ${statusTexto}`, margin + 5, yPosition);
+        yPosition += 6;
+      }
+      
+      if (!cityFilter && !dateFilter && !statusFilter) {
+        doc.text('• Nenhum filtro aplicado (todos os agendamentos)', margin + 5, yPosition);
+        yPosition += 6;
+      }
+      
+      yPosition += 10;
+
+      // Resumo estatístico
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Resumo:', margin, yPosition);
+      yPosition += 8;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Total de Agendamentos: ${totalAppointments}`, margin + 5, yPosition);
+      yPosition += 6;
+      doc.text(`Pendentes: ${pendingAppointments}`, margin + 5, yPosition);
+      yPosition += 6;
+      doc.text(`Confirmados: ${confirmedAppointments}`, margin + 5, yPosition);
+      yPosition += 6;
+      doc.text(`Cancelados: ${canceledAppointments}`, margin + 5, yPosition);
+      yPosition += 15;
+
+      // Tabela de agendamentos
+      if (sortedAppointments.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Detalhes dos Agendamentos:', margin, yPosition);
+        yPosition += 10;
+
+        // Cabeçalho da tabela
+        const colWidths = [35, 25, 25, 20, 30, 35, 25];
+        const headers = ['Nome', 'Filial', 'Data', 'Horário', 'Telefone', 'Observações', 'Status'];
+        
+        doc.setFillColor(41, 128, 185);
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        
+        let xPos = margin;
+        doc.rect(margin, yPosition, pageWidth - (margin * 2), lineHeight, 'F');
+        
+        headers.forEach((header, index) => {
+          doc.text(header, xPos + 2, yPosition + 5);
+          xPos += colWidths[index];
+        });
+        
+        yPosition += lineHeight;
+
+        // Dados da tabela
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+
+        sortedAppointments.forEach((appointment, index) => {
+          // Verificar se precisa de nova página
+          if (yPosition > pageHeight - 30) {
+            doc.addPage();
+            yPosition = margin;
+          }
+
+          // Alternar cor de fundo
+          if (index % 2 === 0) {
+            doc.setFillColor(245, 245, 245);
+            doc.rect(margin, yPosition, pageWidth - (margin * 2), lineHeight, 'F');
+          }
+
+          xPos = margin;
+          
+          // Nome
+          const nome = appointment.nome.length > 20 ? appointment.nome.substring(0, 17) + '...' : appointment.nome;
+          doc.text(nome, xPos + 2, yPosition + 5);
+          xPos += colWidths[0];
+          
+          // Filial
+          const filial = appointment.cidade.length > 15 ? appointment.cidade.substring(0, 12) + '...' : appointment.cidade;
+          doc.text(filial, xPos + 2, yPosition + 5);
+          xPos += colWidths[1];
+          
+          // Data
+          const dataFormatada = appointment.data ? new Date(appointment.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+          doc.text(dataFormatada, xPos + 2, yPosition + 5);
+          xPos += colWidths[2];
+          
+          // Horário
+          doc.text(appointment.horario || '-', xPos + 2, yPosition + 5);
+          xPos += colWidths[3];
+          
+          // Telefone
+          doc.text(appointment.telefone || '-', xPos + 2, yPosition + 5);
+          xPos += colWidths[4];
+          
+          // Observações
+          const obs = (appointment.observacoes || appointment.informacoes || '-');
+          const obsTexto = obs.length > 20 ? obs.substring(0, 17) + '...' : obs;
+          doc.text(obsTexto, xPos + 2, yPosition + 5);
+          xPos += colWidths[5];
+          
+          // Status
+          const statusTexto = appointment.status === 'pendente' ? 'Pendente' : 
+                             appointment.status === 'confirmado' ? 'Confirmado' : 'Cancelado';
+          doc.text(statusTexto, xPos + 2, yPosition + 5);
+          
+          yPosition += lineHeight;
+        });
+      } else {
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'italic');
+        doc.text('Nenhum agendamento encontrado com os filtros aplicados.', margin, yPosition);
+      }
+
+      // Rodapé
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(
+          `Página ${i} de ${totalPages} - Gerado em ${dataFormatada}`,
+          pageWidth / 2,
+          pageHeight - 10,
+          { align: 'center' }
+        );
+      }
+
+      // Salvar o PDF
+      const nomeArquivo = `agendamentos_${dataAtual.toLocaleDateString('pt-BR').replace(/\//g, '-')}_${dataAtual.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }).replace(':', '-')}.pdf`;
+      doc.save(nomeArquivo);
+      
+      toast.success('Relatório PDF gerado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar relatório PDF. Tente novamente.');
+    }
   };
 
   if (loading) {
