@@ -553,8 +553,7 @@ const Financeiro: React.FC = () => {
       return prev.map(registro => {
         if (registro.id === id) {
           if (campo === 'valor') {
-            const valorLimpo = valor.replace(/[^\d,.]/g, '');
-            const valorFormatado = valorLimpo.replace(/\./g, ',').replace(/,/g, ',');
+            const valorFormatado = validarEFormatarValor(valor);
             return { ...registro, [campo]: valorFormatado };
           }
           return { ...registro, [campo]: valor };
@@ -562,6 +561,35 @@ const Financeiro: React.FC = () => {
         return registro;
       });
     });
+  };
+
+  // Função para validar e formatar valor monetário
+  const validarEFormatarValor = (valor: string): string => {
+    if (!valor || typeof valor !== 'string') return '';
+    
+    // Remove espaços e caracteres inválidos, mantém apenas números, vírgula e ponto
+    let valorLimpo = valor.trim().replace(/[^\d,.]/g, '');
+    
+    // Se estiver vazio após limpeza, retorna vazio
+    if (!valorLimpo) return '';
+    
+    // Remove pontos (separadores de milhar) e mantém apenas a vírgula decimal
+    valorLimpo = valorLimpo.replace(/\./g, '');
+    
+    // Se tiver mais de uma vírgula, mantém apenas a primeira
+    const partesVirgula = valorLimpo.split(',');
+    if (partesVirgula.length > 2) {
+      valorLimpo = partesVirgula[0] + ',' + partesVirgula.slice(1).join('');
+    }
+    
+    // Limitar a 2 casas decimais após a vírgula
+    if (valorLimpo.includes(',')) {
+      const [parteInteira, parteDecimal] = valorLimpo.split(',');
+      const decimalLimitado = parteDecimal ? parteDecimal.substring(0, 2) : '';
+      valorLimpo = decimalLimitado ? `${parteInteira},${decimalLimitado}` : parteInteira;
+    }
+    
+    return valorLimpo;
   };
 
   // Funções para gerenciar formas de pagamento
@@ -609,8 +637,7 @@ const Financeiro: React.FC = () => {
           const formasAtualizadas = (registro.formasPagamento || []).map(fp => {
             if (fp.id === formaId) {
               if (campo === 'valor') {
-                const valorLimpo = valor.replace(/[^\d,.]/g, '');
-                const valorFormatado = valorLimpo.replace(/\./g, ',').replace(/,/g, ',');
+                const valorFormatado = validarEFormatarValor(valor);
                 return { ...fp, [campo]: valorFormatado };
               }
               return { ...fp, [campo]: valor };
@@ -636,6 +663,20 @@ const Financeiro: React.FC = () => {
     try {
       setIsLoading(true);
       
+      // Validar valor antes de salvar
+      if (!registro.valor || registro.valor.trim() === '') {
+        setError('O valor é obrigatório.');
+        setIsLoading(false);
+        return false;
+      }
+      
+      const valorNumerico = parseFloat(registro.valor.replace(',', '.'));
+      if (isNaN(valorNumerico) || valorNumerico <= 0) {
+        setError('Valor inválido. Digite um valor maior que zero.');
+        setIsLoading(false);
+        return false;
+      }
+      
       // Preparar dados para salvar
       const dataObj = datas.find(d => d.id === dataSelecionada);
       const filialSelecionada = filiais.find(f => f.id === cidadeSelecionada);
@@ -645,7 +686,7 @@ const Financeiro: React.FC = () => {
         cidade: filialSelecionada?.nome || '',
             agendamento_id: registro.agendamento_id,
             cliente: registro.cliente,
-        valor: parseFloat(registro.valor.replace(',', '.')),
+        valor: valorNumerico,
         tipo: 'receita', // Sempre receita para registros financeiros
         tipo_atendimento: registro.tipo_atendimento, // Tipo específico: particular, convenio, etc.
         forma_pagamento: registro.forma_pagamento || '',
