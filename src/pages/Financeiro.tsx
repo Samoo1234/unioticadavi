@@ -564,23 +564,6 @@ const Financeiro: React.FC = () => {
     });
   };
 
-  // Função para validar valor monetário
-  const validarValorMonetario = (valor: string): boolean => {
-    if (!valor || typeof valor !== 'string') return false;
-    
-    // Remove espaços
-    const valorLimpo = valor.trim();
-    
-    // Verifica se está vazio
-    if (!valorLimpo) return false;
-    
-    // Verifica se contém apenas números, vírgulas e pontos
-    const regexValor = /^[0-9]+([.,][0-9]{1,2})?$/;
-    return regexValor.test(valorLimpo);
-  };
-
-  // Função para formatar valor monetário - removida pois não está sendo usada
-
   // Funções para gerenciar formas de pagamento
   const adicionarFormaPagamento = (registroId: number) => {
     setRegistrosFinanceiros(prev => {
