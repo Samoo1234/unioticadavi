@@ -37,27 +37,31 @@ import {
   Phone as PhoneIcon,
   Refresh as RefreshIcon,
   CalendarToday as CalendarIcon,
-  PictureAsPdf as PdfIcon
+  PictureAsPdf as PdfIcon,
+  PersonAdd as PersonAddIcon,
+  Email as EmailIcon,
+  LocationOn as LocationIcon
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { supabase } from '../services/supabase';
 import jsPDF from 'jspdf';
+import { WebcamCapture } from '../components/WebcamCapture';
 // DatePicker removido - não usado mais no modal
 
 
 interface Filial {
-  id: string;
+  id: number;
   nome: string;
   ativa: boolean;
 }
 
 interface Appointment {
-  id: string;
+  id: string; // UUID no banco de dados
   nome: string;
   telefone: string;
   cidade: string;
-  data: string;
-  horario: string;
+  data: string; // Data separada (date)
+  horario: string; // Horário separado (time)
   observacoes?: string;
   informacoes?: string;
   status: 'pendente' | 'confirmado' | 'cancelado';
@@ -66,10 +70,10 @@ interface Appointment {
 }
 
 interface DataDisponivel {
-  id: string;
+  id: number;
   data: string;
-  filial_id: string;
-  medico_id: string;
+  filial_id: number;
+  medico_id: number;
   ativa: boolean;
   horarios_disponiveis: string[];
 }
@@ -77,18 +81,34 @@ interface DataDisponivel {
 interface AppointmentFormData {
   nome: string;
   telefone: string;
-  filial_id: string;
-  data_id: string;
+  filial_id: number;
+  data_id: number;
   horario: string;
   observacoes: string;
   status: 'pendente' | 'confirmado' | 'cancelado';
 }
 
+interface ClientFormData {
+  nome: string;
+  telefone: string;
+  email: string;
+  cpf: string;
+  rg: string;
+  sexo: 'masculino' | 'feminino' | 'outro' | 'prefiro_nao_informar' | '';
+  data_nascimento: string;
+  nome_pai: string;
+  nome_mae: string;
+  endereco: string;
+  cidade: string;
+  foto_url: string;
+  observacoes: string;
+}
+
 const initialFormData: AppointmentFormData = {
   nome: '',
   telefone: '',
-  filial_id: '',
-  data_id: '',
+  filial_id: 0,
+  data_id: 0,
   horario: '',
   observacoes: '',
   status: 'pendente'
@@ -99,7 +119,7 @@ export function Agendamentos() {
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [datasDisponiveis, setDatasDisponiveis] = useState<DataDisponivel[]>([]);
   const [horariosDisponiveis, setHorariosDisponiveis] = useState<string[]>([]);
-  const [selectedCityDoctor, setSelectedCityDoctor] = useState<string>('');
+  const [selectedCityDoctor, setSelectedCityDoctor] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
@@ -114,7 +134,27 @@ export function Agendamentos() {
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
   const [formData, setFormData] = useState<AppointmentFormData>(initialFormData);
-  const [formErrors, setFormErrors] = useState<Partial<AppointmentFormData>>({});
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof AppointmentFormData, string>>>({});
+
+  // Client registration dialog states
+  const [clientDialogOpen, setClientDialogOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [clientFormData, setClientFormData] = useState<ClientFormData>({
+    nome: '',
+    telefone: '',
+    email: '',
+    cpf: '',
+    rg: '',
+    sexo: '',
+    data_nascimento: '',
+    nome_pai: '',
+    nome_mae: '',
+    endereco: '',
+    cidade: '',
+    foto_url: '',
+    observacoes: ''
+  });
+  const [clientFormErrors, setClientFormErrors] = useState<Partial<ClientFormData>>({});
 
   useEffect(() => {
     loadFiliais();
@@ -161,29 +201,46 @@ export function Agendamentos() {
     }
   };
 
-  const validateForm = (): boolean => {
-    const errors: Partial<AppointmentFormData> = {};
+  const validateForm = (isEditing: boolean = false): boolean => {
+    const errors: Partial<Record<keyof AppointmentFormData, string>> = {};
 
+    // Validação de nome
     if (!formData.nome.trim()) {
       errors.nome = 'Nome é obrigatório';
+    } else if (formData.nome.trim().length < 2) {
+      errors.nome = 'Nome deve ter pelo menos 2 caracteres';
+    } else if (formData.nome.trim().length > 100) {
+      errors.nome = 'Nome deve ter no máximo 100 caracteres';
     }
 
+    // Validação de telefone
     if (!formData.telefone.trim()) {
       errors.telefone = 'Telefone é obrigatório';
     } else if (!/^\(\d{2}\)\s\d{4,5}-\d{4}$/.test(formData.telefone)) {
       errors.telefone = 'Formato de telefone inválido. Use (99) 99999-9999';
     }
 
-    if (!formData.filial_id) {
-      errors.filial_id = 'Cidade é obrigatória';
+    // Validações apenas para NOVO agendamento (não para edição)
+    if (!isEditing) {
+      // Validação de filial
+      if (!formData.filial_id || formData.filial_id === 0) {
+        errors.filial_id = 'Filial é obrigatória';
+      }
+
+      // Validação de data
+      if (!formData.data_id || formData.data_id === 0) {
+        errors.data_id = 'Data é obrigatória';
+      }
+
+      // Validação de horário
+      if (!formData.horario) {
+        errors.horario = 'Horário é obrigatório';
+      }
     }
 
-    if (!formData.data_id) {
-      errors.data_id = 'Data é obrigatória';
-    }
-
-    if (!formData.horario) {
-      errors.horario = 'Horário é obrigatório';
+    // Validação de observações (opcional, mas com limite)
+    if (formData.observacoes && formData.observacoes.length > 500) {
+      errors.observacoes = 'Observações devem ter no máximo 500 caracteres';
     }
 
     setFormErrors(errors);
@@ -191,7 +248,9 @@ export function Agendamentos() {
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) return;
+    if (!validateForm(!!editingAppointment)) {
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -212,6 +271,7 @@ export function Agendamentos() {
           .eq('id', editingAppointment.id);
 
         if (error) throw error;
+        
         toast.success('Agendamento atualizado com sucesso!');
       } else {
         // Criar novo agendamento
@@ -287,10 +347,10 @@ export function Agendamentos() {
     setFormData({
       nome: appointment.nome,
       telefone: appointment.telefone,
-      filial_id: '', // Não usado em edição
-      data_id: '', // Não usado em edição
-      horario: appointment.horario,
-      observacoes: appointment.observacoes || appointment.informacoes || '',
+      filial_id: 0, // Não usado em edição
+      data_id: 0, // Não usado em edição
+      horario: appointment.horario || '', // Horário já vem separado do banco
+      observacoes: appointment.observacoes || '',
       status: appointment.status
     });
     setDialogOpen(true);
@@ -357,10 +417,184 @@ export function Agendamentos() {
     setFormErrors({});
     setDatasDisponiveis([]);
     setHorariosDisponiveis([]);
-    setSelectedCityDoctor('');
+    setSelectedCityDoctor(0);
   };
 
-  const loadDatasDisponiveis = async (filialId: string) => {
+  // Funções para cadastro de cliente
+  const handleOpenClientDialog = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setClientFormData({
+      nome: appointment.nome,
+      telefone: appointment.telefone,
+      email: '',
+      cpf: '',
+      rg: '',
+      sexo: '',
+      data_nascimento: '',
+      nome_pai: '',
+      nome_mae: '',
+      endereco: '',
+      cidade: appointment.cidade,
+      foto_url: '',
+      observacoes: ''
+    });
+    setClientDialogOpen(true);
+  };
+
+  const handleCloseClientDialog = () => {
+    setClientDialogOpen(false);
+    setSelectedAppointment(null);
+    setClientFormData({
+      nome: '',
+      telefone: '',
+      email: '',
+      cpf: '',
+      rg: '',
+      sexo: '',
+      data_nascimento: '',
+      nome_pai: '',
+      nome_mae: '',
+      endereco: '',
+      cidade: '',
+      foto_url: '',
+      observacoes: ''
+    });
+    setClientFormErrors({});
+  };
+
+  const validateClientForm = (): boolean => {
+    const errors: Partial<ClientFormData> = {};
+
+    if (!clientFormData.nome.trim()) {
+      errors.nome = 'Nome é obrigatório';
+    }
+
+    if (!clientFormData.telefone.trim()) {
+      errors.telefone = 'Telefone é obrigatório';
+    }
+
+    if (clientFormData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientFormData.email)) {
+      errors.email = 'Email inválido';
+    }
+
+    if (clientFormData.cpf && !/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(clientFormData.cpf)) {
+      errors.cpf = 'CPF inválido. Use o formato 000.000.000-00';
+    }
+
+    setClientFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSaveClient = async () => {
+    if (!validateClientForm()) return;
+
+    try {
+      setSubmitting(true);
+
+      // Verificar se o cliente já existe pelo telefone ou CPF
+      let query = supabase.from('clientes').select('*');
+      
+      if (clientFormData.cpf) {
+        query = query.eq('cpf', clientFormData.cpf);
+      } else {
+        query = query.eq('telefone', clientFormData.telefone);
+      }
+
+      const { data: existingClients, error: checkError } = await query;
+
+      if (checkError) throw checkError;
+
+      if (existingClients && existingClients.length > 0) {
+        toast.warning('Cliente já cadastrado no sistema!');
+        setSubmitting(false);
+        return;
+      }
+
+      // Gerar código único para o cliente baseado na cidade (formato: XXX-NNNN)
+      // Mapeamento de cidades para iniciais
+      const cidadeParaIniciais: { [key: string]: string } = {
+        'Mantena': 'MAN',
+        'Mantenópolis': 'MTP',
+        'Central de Minas': 'CDM',
+        'Alto Rio Novo': 'ARN',
+        'São João do Manteninha': 'SJM'
+      };
+
+      const iniciaisCidade = cidadeParaIniciais[clientFormData.cidade] || 'CLI';
+      
+      // Buscar o último código da cidade para incrementar
+      const { data: ultimoCliente, error: ultimoError } = await supabase
+        .from('clientes')
+        .select('codigo')
+        .like('codigo', `${iniciaisCidade}-%`)
+        .order('codigo', { ascending: false })
+        .limit(1);
+
+      if (ultimoError) throw ultimoError;
+
+      let numeroSequencial = 1;
+      if (ultimoCliente && ultimoCliente.length > 0 && ultimoCliente[0].codigo) {
+        const ultimoCodigo = ultimoCliente[0].codigo;
+        if (ultimoCodigo.includes('-')) {
+          const ultimoNumero = parseInt(ultimoCodigo.split('-')[1]);
+          if (!isNaN(ultimoNumero)) {
+            numeroSequencial = ultimoNumero + 1;
+          }
+        }
+      }
+
+      const codigoCliente = `${iniciaisCidade}-${numeroSequencial.toString().padStart(4, '0')}`;
+
+      // Preparar dados do cliente
+      const clientData = {
+        codigo: codigoCliente,
+        nome: clientFormData.nome,
+        telefone: clientFormData.telefone,
+        email: clientFormData.email || null,
+        cpf: clientFormData.cpf || null,
+        rg: clientFormData.rg || null,
+        sexo: clientFormData.sexo || null,
+        data_nascimento: clientFormData.data_nascimento || null,
+        nome_pai: clientFormData.nome_pai || null,
+        nome_mae: clientFormData.nome_mae || null,
+        cidade: clientFormData.cidade || null,
+        endereco: clientFormData.endereco ? { rua: clientFormData.endereco, cidade: clientFormData.cidade } : null,
+        foto_url: clientFormData.foto_url || null,
+        observacoes: clientFormData.observacoes || null,
+        active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: insertError } = await supabase
+        .from('clientes')
+        .insert([clientData]);
+
+      if (insertError) throw insertError;
+
+      toast.success(`Cliente cadastrado com sucesso! Código: ${codigoCliente}`);
+      handleCloseClientDialog();
+    } catch (error: any) {
+      console.error('Erro ao cadastrar cliente:', error);
+      toast.error(error.message || 'Erro ao cadastrar cliente');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleClientInputChange = (field: keyof ClientFormData, value: string) => {
+    setClientFormData(prev => ({ ...prev, [field]: value }));
+    
+    if (clientFormErrors[field]) {
+      setClientFormErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const handlePhotoCapture = (imageUrl: string) => {
+    setClientFormData(prev => ({ ...prev, foto_url: imageUrl }));
+  };
+
+  const loadDatasDisponiveis = async (filialId: number) => {
     try {
       const { data, error } = await supabase
         .from('datas_disponiveis')
@@ -384,7 +618,7 @@ export function Agendamentos() {
             .single();
             
           if (!medicoError && medicoData) {
-            setSelectedCityDoctor(medicoData.nome);
+            setSelectedCityDoctor(filialDates[0].medico_id);
           }
         }
       }
@@ -397,7 +631,7 @@ export function Agendamentos() {
     }
   };
 
-  const loadHorariosDisponiveis = async (dataId: string) => {
+  const loadHorariosDisponiveis = async (dataId: number) => {
     try {
       const dataSelecionada = datasDisponiveis.find(d => d.id === dataId);
       
@@ -419,8 +653,12 @@ export function Agendamentos() {
           };
           
           const addTimeSlots = (start: string, end: string, interval: number) => {
+            if (!start || !end || !start.includes(':') || !end.includes(':')) return;
+            
             const [startHours, startMinutes] = start.split(':').map(Number);
             const [endHours, endMinutes] = end.split(':').map(Number);
+            
+            if (isNaN(startHours) || isNaN(startMinutes) || isNaN(endHours) || isNaN(endMinutes)) return;
             
             let currentHours = startHours;
             let currentMinutes = startMinutes;
@@ -496,10 +734,13 @@ export function Agendamentos() {
     }
   };
 
-  const handleInputChange = (field: keyof AppointmentFormData, value: string | 'pendente' | 'confirmado' | 'cancelado') => {
+  const handleInputChange = (field: keyof AppointmentFormData, value: string | number | 'pendente' | 'confirmado' | 'cancelado') => {
     if (field === 'telefone') {
       const formattedPhone = formatPhoneNumber(value as string);
       setFormData(prev => ({ ...prev, [field]: formattedPhone }));
+    } else if (field === 'filial_id' || field === 'data_id') {
+      // Campos numéricos
+      setFormData(prev => ({ ...prev, [field]: typeof value === 'number' ? value : Number(value) }));
     } else {
       setFormData(prev => ({ ...prev, [field]: value }));
     }
@@ -510,11 +751,11 @@ export function Agendamentos() {
 
     // Carregar dados dependentes
     if (field === 'filial_id' && value) {
-      loadDatasDisponiveis(value as string);
-      setFormData(prev => ({ ...prev, data_id: '', horario: '' }));
+      loadDatasDisponiveis(Number(value));
+      setFormData(prev => ({ ...prev, data_id: 0, horario: '' }));
       setHorariosDisponiveis([]);
     } else if (field === 'data_id' && value) {
-      loadHorariosDisponiveis(value as string);
+      loadHorariosDisponiveis(Number(value));
       setFormData(prev => ({ ...prev, horario: '' }));
     }
   };
@@ -523,7 +764,7 @@ export function Agendamentos() {
   const availableDates = [...new Set(
     appointments
       .filter(a => a.cidade === cityFilter)
-      .map(a => a.data ? a.data.trim() : '')
+      .map(a => a.data)
   )].sort();
 
   // Selecionar automaticamente a primeira data disponível quando a cidade é selecionada
@@ -538,7 +779,7 @@ export function Agendamentos() {
   // Filtrar agendamentos
   const filteredAppointments = appointments.filter(appointment => {
     const matchesCity = !cityFilter || appointment.cidade === cityFilter;
-    const matchesDate = !dateFilter || (appointment.data ? appointment.data.trim() : '') === (dateFilter ? dateFilter.trim() : '');
+    const matchesDate = !dateFilter || appointment.data === dateFilter;
     const matchesStatus = !statusFilter || appointment.status === statusFilter;
     
     return matchesCity && matchesDate && matchesStatus;
@@ -547,10 +788,15 @@ export function Agendamentos() {
   // Ordenar agendamentos por horário
   const sortedAppointments = [...filteredAppointments].sort((a, b) => {
     // Converter horários para minutos para facilitar a comparação
-    const getMinutes = (time: string) => {
-      if (!time) return 0;
-      const [hours, minutes] = time.split(':').map(Number);
-      return (hours * 60) + minutes;
+    const getMinutes = (time: string | null | undefined) => {
+      if (!time || typeof time !== 'string' || !time.includes(':')) return 0;
+      try {
+        const [hours, minutes] = time.split(':').map(Number);
+        if (isNaN(hours) || isNaN(minutes)) return 0;
+        return (hours * 60) + minutes;
+      } catch {
+        return 0;
+      }
     };
     
     const minutesA = getMinutes(a.horario);
@@ -995,7 +1241,7 @@ export function Agendamentos() {
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         {appointment.data ? new Date(appointment.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
                       </TableCell>
-                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{appointment.horario}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{appointment.horario || '-'}</TableCell>
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>{appointment.telefone}</TableCell>
                       <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
                         {appointment.observacoes || appointment.informacoes || '-'}
@@ -1023,6 +1269,15 @@ export function Agendamentos() {
                         </FormControl>
                       </TableCell>
                       <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
+                        <Tooltip title="Cadastrar Cliente">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleOpenClientDialog(appointment)}
+                            color="success"
+                          >
+                            <PersonAddIcon />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title="Editar">
                           <IconButton
                             size="small"
@@ -1244,6 +1499,202 @@ export function Agendamentos() {
             disabled={submitting}
           >
             {submitting ? <CircularProgress size={20} /> : 'Excluir'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de cadastro de cliente */}
+      <Dialog open={clientDialogOpen} onClose={handleCloseClientDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          Cadastrar Cliente
+          <Typography variant="caption" display="block" color="text.secondary">
+            Dados do agendamento: {selectedAppointment?.nome}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            {/* Foto */}
+            <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'center' }}>
+              <WebcamCapture 
+                onCapture={handlePhotoCapture}
+                currentImage={clientFormData.foto_url}
+              />
+            </Grid>
+
+            {/* Nome e Telefone */}
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Nome *"
+                value={clientFormData.nome}
+                onChange={(e) => handleClientInputChange('nome', e.target.value)}
+                error={!!clientFormErrors.nome}
+                helperText={clientFormErrors.nome}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PersonIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Telefone *"
+                value={clientFormData.telefone}
+                onChange={(e) => handleClientInputChange('telefone', e.target.value)}
+                error={!!clientFormErrors.telefone}
+                helperText={clientFormErrors.telefone}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PhoneIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+
+            {/* Email e Sexo */}
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Email"
+                type="email"
+                value={clientFormData.email}
+                onChange={(e) => handleClientInputChange('email', e.target.value)}
+                error={!!clientFormErrors.email}
+                helperText={clientFormErrors.email}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmailIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Sexo</InputLabel>
+                <Select
+                  value={clientFormData.sexo}
+                  label="Sexo"
+                  onChange={(e) => handleClientInputChange('sexo', e.target.value)}
+                >
+                  <MenuItem value="">Selecione</MenuItem>
+                  <MenuItem value="masculino">Masculino</MenuItem>
+                  <MenuItem value="feminino">Feminino</MenuItem>
+                  <MenuItem value="outro">Outro</MenuItem>
+                  <MenuItem value="prefiro_nao_informar">Prefiro não informar</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* CPF e RG */}
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="CPF"
+                value={clientFormData.cpf}
+                onChange={(e) => handleClientInputChange('cpf', e.target.value)}
+                error={!!clientFormErrors.cpf}
+                helperText={clientFormErrors.cpf}
+                placeholder="000.000.000-00"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="RG"
+                value={clientFormData.rg}
+                onChange={(e) => handleClientInputChange('rg', e.target.value)}
+              />
+            </Grid>
+
+            {/* Data de Nascimento */}
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Data de Nascimento"
+                type="date"
+                value={clientFormData.data_nascimento}
+                onChange={(e) => handleClientInputChange('data_nascimento', e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+
+            {/* Cidade */}
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Cidade"
+                value={clientFormData.cidade}
+                onChange={(e) => handleClientInputChange('cidade', e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LocationIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+
+            {/* Filiação */}
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Nome do Pai"
+                value={clientFormData.nome_pai}
+                onChange={(e) => handleClientInputChange('nome_pai', e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Nome da Mãe"
+                value={clientFormData.nome_mae}
+                onChange={(e) => handleClientInputChange('nome_mae', e.target.value)}
+              />
+            </Grid>
+
+            {/* Endereço */}
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Endereço"
+                value={clientFormData.endereco}
+                onChange={(e) => handleClientInputChange('endereco', e.target.value)}
+                multiline
+                rows={2}
+              />
+            </Grid>
+
+            {/* Observações */}
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Observações"
+                value={clientFormData.observacoes}
+                onChange={(e) => handleClientInputChange('observacoes', e.target.value)}
+                multiline
+                rows={3}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseClientDialog}>Cancelar</Button>
+          <Button
+            onClick={handleSaveClient}
+            variant="contained"
+            disabled={submitting}
+            startIcon={submitting ? <CircularProgress size={20} /> : <PersonAddIcon />}
+          >
+            {submitting ? 'Cadastrando...' : 'Cadastrar Cliente'}
           </Button>
         </DialogActions>
       </Dialog>

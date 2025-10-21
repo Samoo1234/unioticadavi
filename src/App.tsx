@@ -56,22 +56,18 @@ function AppContent() {
       {/* Rotas protegidas com Layout */}
       <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
       
-      {/* Agendamentos - Removido */}
-      
       {/* Cadastros */}
       <Route path="/clientes" element={<ProtectedRoute><Layout><Clientes /></Layout></ProtectedRoute>} />
       <Route path="/medicos" element={<ProtectedRoute><Layout><Medicos /></Layout></ProtectedRoute>} />
       <Route path="/cidades" element={<ProtectedRoute><Layout><Filiais /></Layout></ProtectedRoute>} />
       <Route path="/sistema-agendamento/datas-disponiveis" element={<ProtectedRoute><Layout><DatasDisponiveis /></Layout></ProtectedRoute>} />
       
-      {/* Financeiro - Removido */}
-      
       {/* Configurações */}
       <Route path="/configuracoes/usuarios" element={<ProtectedRoute><Layout><Usuarios /></Layout></ProtectedRoute>} />
       
       {/* Rotas do Sistema de Agendamento */}
       <Route path="/sistema-agendamento/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
-      {/* Datas Disponíveis - Removido */}
+      <Route path="/sistema-agendamento/datas-disponiveis" element={<ProtectedRoute><Layout><DatasDisponiveis /></Layout></ProtectedRoute>} />
       <Route path="/sistema-agendamento/medicos" element={<ProtectedRoute><Layout><Medicos /></Layout></ProtectedRoute>} />
       <Route path="/sistema-agendamento/cidades" element={<ProtectedRoute><Layout><Filiais /></Layout></ProtectedRoute>} />
       <Route path="/sistema-agendamento/clientes" element={<ProtectedRoute><Layout><Clientes /></Layout></ProtectedRoute>} />

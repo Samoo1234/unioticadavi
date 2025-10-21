@@ -33,7 +33,7 @@ import { toast } from 'react-toastify';
 import { supabase } from '../services/supabase';
 
 interface Doctor {
-  id: string;
+  id: number;
   nome: string;
   ativo: boolean;
   created_at: string;
@@ -115,10 +115,21 @@ export function Medicos() {
   };
 
   const validateForm = (): boolean => {
+    // Validação de nome
     if (!formData.nome.trim()) {
       toast.error('Nome do médico é obrigatório');
       return false;
+    } else if (formData.nome.trim().length < 2) {
+      toast.error('Nome deve ter pelo menos 2 caracteres');
+      return false;
+    } else if (formData.nome.trim().length > 100) {
+      toast.error('Nome deve ter no máximo 100 caracteres');
+      return false;
+    } else if (!/^[a-zA-ZÀ-ÿ\s]+$/.test(formData.nome.trim())) {
+      toast.error('Nome deve conter apenas letras e espaços');
+      return false;
     }
+    
     return true;
   };
 

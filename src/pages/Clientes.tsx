@@ -45,15 +45,22 @@ import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Client {
-  id: string;
+  id: string; // UUID no banco
+  codigo?: string;
   nome: string;
   telefone: string;
   email?: string;
-  endereco?: string;
+  cpf?: string;
+  rg?: string;
+  sexo?: 'masculino' | 'feminino' | 'outro' | 'prefiro_nao_informar';
+  endereco?: string | { rua?: string; cidade?: string }; // JSONB no banco
   cidade?: string;
   data_nascimento?: string;
+  nome_pai?: string;
+  nome_mae?: string;
+  foto_url?: string;
   observacoes?: string;
-  ativo: boolean;
+  active: boolean; // Nome correto no banco é 'active'
   created_at: string;
   updated_at: string;
 }
@@ -164,7 +171,7 @@ export function Clientes() {
           .from('clientes')
           .insert([{
             ...clientData,
-            ativo: true,
+            active: true,
             created_at: new Date().toISOString()
           }]);
 
@@ -184,11 +191,22 @@ export function Clientes() {
 
   const handleEdit = (client: Client) => {
     setEditingClient(client);
+    
+    // Extrair endereço do JSONB se for objeto
+    let enderecoStr = '';
+    if (client.endereco) {
+      if (typeof client.endereco === 'object' && 'rua' in client.endereco) {
+        enderecoStr = (client.endereco as any).rua || '';
+      } else if (typeof client.endereco === 'string') {
+        enderecoStr = client.endereco;
+      }
+    }
+    
     setFormData({
       nome: client.nome,
       telefone: client.telefone,
       email: client.email || '',
-      endereco: client.endereco || '',
+      endereco: enderecoStr,
       cidade: client.cidade || '',
       data_nascimento: client.data_nascimento || '',
       observacoes: client.observacoes || ''
@@ -221,7 +239,7 @@ export function Clientes() {
         const { error } = await supabase
           .from('clientes')
           .update({ 
-            ativo: false,
+            active: false,
             updated_at: new Date().toISOString()
           })
           .eq('id', clientToDelete.id);
@@ -257,14 +275,14 @@ export function Clientes() {
       const { error } = await supabase
         .from('clientes')
         .update({ 
-          ativo: !client.ativo,
+          active: !client.active,
           updated_at: new Date().toISOString()
         })
         .eq('id', client.id);
 
       if (error) throw error;
 
-      toast.success(`Cliente ${!client.ativo ? 'ativado' : 'desativado'} com sucesso!`);
+      toast.success(`Cliente ${!client.active ? 'ativado' : 'desativado'} com sucesso!`);
       loadClients();
     } catch (error: any) {
       console.error('Erro ao alterar status:', error);
@@ -295,15 +313,15 @@ export function Clientes() {
                          (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesStatus = statusFilter === 'all' || 
-                         (statusFilter === 'active' && client.ativo) ||
-                         (statusFilter === 'inactive' && !client.ativo);
+                         (statusFilter === 'active' && client.active) ||
+                         (statusFilter === 'inactive' && !client.active);
     
     return matchesSearch && matchesStatus;
   });
 
   // Estatísticas
   const totalClients = clients.length;
-  const activeClients = clients.filter(c => c.ativo).length;
+  const activeClients = clients.filter(c => c.active).length;
   const inactiveClients = totalClients - activeClients;
 
   if (loading) {
@@ -448,6 +466,7 @@ export function Clientes() {
             <Table>
               <TableHead>
                 <TableRow>
+                  <TableCell>Código</TableCell>
                   <TableCell>Nome</TableCell>
                   <TableCell>Telefone</TableCell>
                   <TableCell>Email</TableCell>
@@ -460,7 +479,7 @@ export function Clientes() {
               <TableBody>
                 {filteredClients.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       <Typography variant="body1" color="text.secondary" sx={{ py: 4 }}>
                         {searchTerm || statusFilter !== 'all' 
                           ? 'Nenhum cliente encontrado com os filtros aplicados'
@@ -473,6 +492,14 @@ export function Clientes() {
                   filteredClients.map((client) => (
                     <TableRow key={client.id} hover>
                       <TableCell>
+                        <Chip 
+                          label={client.codigo || 'N/A'} 
+                          size="small" 
+                          color="primary" 
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
                         <Typography variant="body2" fontWeight="medium">
                           {client.nome}
                         </Typography>
@@ -482,8 +509,8 @@ export function Clientes() {
                       <TableCell>{client.cidade || '-'}</TableCell>
                       <TableCell>
                         <Chip
-                          label={client.ativo ? 'Ativo' : 'Inativo'}
-                          color={client.ativo ? 'success' : 'error'}
+                          label={client.active ? 'Ativo' : 'Inativo'}
+                          color={client.active ? 'success' : 'error'}
                           size="small"
                           onClick={() => handleToggleStatus(client)}
                           sx={{ cursor: 'pointer' }}

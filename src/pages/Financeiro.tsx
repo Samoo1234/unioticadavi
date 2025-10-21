@@ -45,20 +45,20 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 interface Filial {
-  id: string;
+  id: number;
   nome: string;
   ativa: boolean;
 }
 
 interface DataDisponivel {
-  id: string;
+  id: number;
   data: string;
   filial_id: number;
   dia_semana?: string;
 }
 
 interface Agendamento {
-  id: string;
+  id: number;
   cliente?: string;
   paciente?: string;
   nome?: string;
@@ -75,16 +75,12 @@ interface FormaPagamento {
 }
 
 interface RegistroFinanceiro {
-  id: string;
-  data: string;
-  cidade: string;
-  agendamento_id: string | null;
+  id: number;
+  agendamento_id: number;
   cliente: string;
   valor: string;
-  tipo: string; // 'receita' ou 'despesa'
-  tipo_atendimento: string; // 'particular', 'convenio', etc.
+  tipo: string;
   forma_pagamento: string;
-  formasPagamento?: FormaPagamento[];
   situacao: string;
   observacoes: string | null;
   data_pagamento: string | null;
@@ -93,6 +89,10 @@ interface RegistroFinanceiro {
   // Campos apenas para controle local
   novo?: boolean;
   editando?: boolean;
+  formasPagamento?: FormaPagamento[];
+  tipo_atendimento?: string; // Campo adicional para controle local
+  data?: string; // Campo adicional para controle local
+  cidade?: string; // Campo adicional para controle local
 }
 
 interface Estatisticas {
@@ -118,8 +118,8 @@ interface Estatisticas {
 
 const Financeiro: React.FC = () => {
   const [filiais, setFiliais] = useState<Filial[]>([]);
-  const [cidadeSelecionada, setCidadeSelecionada] = useState('');
-  const [dataSelecionada, setDataSelecionada] = useState('');
+  const [cidadeSelecionada, setCidadeSelecionada] = useState<number>(0);
+  const [dataSelecionada, setDataSelecionada] = useState<number>(0);
   const [diaSemana, setDiaSemana] = useState('');
   const [datas, setDatas] = useState<DataDisponivel[]>([]);
   const [datasFiltradasPorCidade, setDatasFiltradasPorCidade] = useState<DataDisponivel[]>([]);
@@ -208,7 +208,7 @@ const Financeiro: React.FC = () => {
     
     console.log('Filial selecionada ID:', cidadeSelecionada);
     console.log('Todas as datas disponíveis:', datas);
-    const datasFiltradas = datas.filter(data => data.filial_id && data.filial_id.toString() === cidadeSelecionada);
+    const datasFiltradas = datas.filter(data => data.filial_id && data.filial_id === Number(cidadeSelecionada));
     console.log('Datas filtradas por filial_id:', datasFiltradas);
     setDatasFiltradasPorCidade(datasFiltradas);
   }, [cidadeSelecionada, datas, filiais]);
@@ -260,7 +260,7 @@ const Financeiro: React.FC = () => {
       
       // Buscar registros financeiros por data e cidade diretamente
       const { data: registrosData, error: registrosError } = await supabase
-        .from('registros_financeiros')
+            .from('registros_financeiros')
         .select('*, tipo_atendimento')
         .eq('data', dataFormatada)
         .eq('cidade', nomeFilial);
@@ -316,7 +316,8 @@ const Financeiro: React.FC = () => {
       if (agendamentosSemRegistros.length > 0) {
         console.log('🆕 Criando novos registros financeiros para agendamentos sem registro...');
         agendamentosSemRegistros.forEach((agendamento) => {
-          const novoRegistroId = `novo_${agendamento.id}`;
+          // Usar ID negativo temporário para novos registros
+          const novoRegistroId = -(agendamento.id);
           
           let nomeCliente = '';
           if (agendamento.paciente) {
@@ -350,7 +351,7 @@ const Financeiro: React.FC = () => {
           };
 
           registrosDeAgendamentos.push(novoRegistro);
-        });
+      });
       }
 
       setRegistrosFinanceiros(registrosDeAgendamentos);
@@ -395,8 +396,19 @@ const Financeiro: React.FC = () => {
     for (const registro of registros) {
       if (!registro.valor || !registro.tipo_atendimento) continue;
       
-      const valor = parseFloat(registro.valor.replace(',', '.'));
-      if (isNaN(valor)) continue;
+      // Função auxiliar para converter valor brasileiro para número
+      const parseValorBrasileiro = (valorStr: string): number => {
+        if (!valorStr || typeof valorStr !== 'string') return 0;
+        
+        // Remove espaços e converte vírgula para ponto
+        const valorLimpo = valorStr.trim().replace(/\./g, '').replace(',', '.');
+        const valor = parseFloat(valorLimpo);
+        
+        return isNaN(valor) ? 0 : valor;
+      };
+      
+      const valor = parseValorBrasileiro(registro.valor);
+      if (valor === 0) continue;
       
       stats.totalGeral += valor;
       stats.countTotal++;
@@ -432,8 +444,8 @@ const Financeiro: React.FC = () => {
         for (const pagamento of registro.formasPagamento) {
           if (!pagamento.forma_pagamento || !pagamento.valor) continue;
           
-          const valorPagamento = parseFloat(pagamento.valor.replace(',', '.'));
-          if (isNaN(valorPagamento)) continue;
+          const valorPagamento = parseValorBrasileiro(pagamento.valor);
+          if (valorPagamento === 0) continue;
           
           switch (pagamento.forma_pagamento.toLowerCase()) {
             case 'dinheiro':
@@ -515,7 +527,7 @@ const Financeiro: React.FC = () => {
   const handleChangeCidade = (event: any) => {
     const valor = event.target.value;
     setCidadeSelecionada(valor);
-    setDataSelecionada('');
+    setDataSelecionada(0);
     setDiaSemana('');
     setRegistrosFinanceiros([]);
   };
@@ -536,7 +548,7 @@ const Financeiro: React.FC = () => {
     }
   };
 
-  const handleChangeRegistro = (id: string, campo: string, valor: string) => {
+  const handleChangeRegistro = (id: number, campo: string, valor: string) => {
     setRegistrosFinanceiros(prev => {
       return prev.map(registro => {
         if (registro.id === id) {
@@ -552,8 +564,25 @@ const Financeiro: React.FC = () => {
     });
   };
 
+  // Função para validar valor monetário
+  const validarValorMonetario = (valor: string): boolean => {
+    if (!valor || typeof valor !== 'string') return false;
+    
+    // Remove espaços
+    const valorLimpo = valor.trim();
+    
+    // Verifica se está vazio
+    if (!valorLimpo) return false;
+    
+    // Verifica se contém apenas números, vírgulas e pontos
+    const regexValor = /^[0-9]+([.,][0-9]{1,2})?$/;
+    return regexValor.test(valorLimpo);
+  };
+
+  // Função para formatar valor monetário - removida pois não está sendo usada
+
   // Funções para gerenciar formas de pagamento
-  const adicionarFormaPagamento = (registroId: string) => {
+  const adicionarFormaPagamento = (registroId: number) => {
     setRegistrosFinanceiros(prev => {
       return prev.map(registro => {
         if (registro.id === registroId) {
@@ -571,7 +600,7 @@ const Financeiro: React.FC = () => {
     });
   };
 
-  const removerFormaPagamento = (registroId: string, formaId: string) => {
+  const removerFormaPagamento = (registroId: number, formaId: string) => {
     setRegistrosFinanceiros(prev => {
       return prev.map(registro => {
         if (registro.id === registroId) {
@@ -590,7 +619,7 @@ const Financeiro: React.FC = () => {
     });
   };
 
-  const handleChangeFormaPagamento = (registroId: string, formaId: string, campo: string, valor: string) => {
+  const handleChangeFormaPagamento = (registroId: number, formaId: string, campo: string, valor: string) => {
     setRegistrosFinanceiros(prev => {
       return prev.map(registro => {
         if (registro.id === registroId) {
@@ -631,14 +660,14 @@ const Financeiro: React.FC = () => {
       const dadosParaSalvar = {
         data: dataObj?.data || new Date().toISOString().split('T')[0],
         cidade: filialSelecionada?.nome || '',
-        agendamento_id: registro.agendamento_id,
-        cliente: registro.cliente,
+            agendamento_id: registro.agendamento_id,
+            cliente: registro.cliente,
         valor: parseFloat(registro.valor.replace(',', '.')),
         tipo: 'receita', // Sempre receita para registros financeiros
         tipo_atendimento: registro.tipo_atendimento, // Tipo específico: particular, convenio, etc.
         forma_pagamento: registro.forma_pagamento || '',
         formas_pagamento: registro.formasPagamento || [],
-        situacao: registro.situacao,
+            situacao: registro.situacao,
         observacoes: registro.observacoes,
         data_pagamento: new Date().toISOString()
       };
@@ -681,7 +710,7 @@ const Financeiro: React.FC = () => {
     }
   };
 
-  const excluirRegistro = async (id: string) => {
+  const excluirRegistro = async (id: number) => {
     try {
       const { error } = await supabase
         .from('registros_financeiros')
@@ -704,23 +733,23 @@ const Financeiro: React.FC = () => {
 
   const gerarPDF = () => {
     try {
-      if (!registrosFinanceiros || registrosFinanceiros.length === 0) {
-        alert('Não há registros financeiros para gerar o PDF.');
-        return;
-      }
+    if (!registrosFinanceiros || registrosFinanceiros.length === 0) {
+      alert('Não há registros financeiros para gerar o PDF.');
+      return;
+    }
       
       console.log('Iniciando geração do PDF...');
-      
-      const doc = new jsPDF({
+    
+    const doc = new jsPDF({
         orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      const filialSelecionadaObj = filiais.find(filial => filial.id === cidadeSelecionada);
-      const nomeFilial = filialSelecionadaObj ? filialSelecionadaObj.nome : 'Desconhecida';
-      
-      const dataObj = datas.find(d => d.id === dataSelecionada);
+      unit: 'mm',
+      format: 'a4'
+    });
+    
+    const filialSelecionadaObj = filiais.find(filial => filial.id === cidadeSelecionada);
+    const nomeFilial = filialSelecionadaObj ? filialSelecionadaObj.nome : 'Desconhecida';
+    
+    const dataObj = datas.find(d => d.id === dataSelecionada);
       const dataFormatada = dataObj ? formatarData(dataObj.data) : 'Data desconhecida';
       
       // Configurações de cores e estilos
@@ -761,7 +790,7 @@ const Financeiro: React.FC = () => {
       
       // Resumo Financeiro em tabela
       yPos += 15;
-      doc.setFontSize(14);
+    doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...primaryColor);
       doc.text('RESUMO FINANCEIRO', 20, yPos);
@@ -807,7 +836,7 @@ const Financeiro: React.FC = () => {
       doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
       doc.rect(20, yPos - 5, pageWidth - 40, 15, 'S');
       
-      doc.setFontSize(12);
+    doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...primaryColor);
       doc.text('TOTAL GERAL:', 25, yPos + 3);
@@ -946,8 +975,8 @@ const Financeiro: React.FC = () => {
       }
       
       console.log('PDF gerado com sucesso, iniciando download...');
-      
-      // Salvar PDF
+    
+    // Salvar PDF
       const fileName = `relatorio-financeiro-${nomeFilial.replace(/\s+/g, '-')}-${dataFormatada.replace(/\//g, '-')}.pdf`;
       doc.save(fileName);
       
@@ -967,10 +996,10 @@ const Financeiro: React.FC = () => {
   };
 
   return (
-    <Box sx={{ 
-      p: 3, 
-      height: '80vh', 
-      overflowY: 'auto',
+         <Box sx={{ 
+       p: 3, 
+       height: '80vh', 
+       overflowY: 'auto',
       backgroundColor: '#f5f5f5',
       '&::-webkit-scrollbar': {
         width: '8px',
@@ -1080,13 +1109,13 @@ const Financeiro: React.FC = () => {
             <Card sx={{ mb: 3, backgroundColor: '#f8f9fa', border: '2px solid #1976d2' }}>
               <CardContent sx={{ textAlign: 'center', py: 2 }}>
                 <Typography variant="h4" sx={{ color: '#1976d2', fontWeight: 'bold' }}>
-                  {formatarMoeda(estatisticas.totalGeral)}
-                </Typography>
+                      {formatarMoeda(estatisticas.totalGeral)}
+                    </Typography>
                 <Typography variant="h6" color="text.secondary">
                   Total Geral ({estatisticas.countTotal} registros)
-                </Typography>
-              </CardContent>
-            </Card>
+                    </Typography>
+                  </CardContent>
+                </Card>
 
             {/* Tipos de Atendimento */}
             <Typography variant="h6" gutterBottom sx={{ mt: 3, mb: 2, color: '#333' }}>
@@ -1271,29 +1300,29 @@ const Financeiro: React.FC = () => {
             <>
               {registrosFinanceiros.length === 0 && (
                 <Typography color="text.secondary" sx={{ mb: 2 }}>
-                  Nenhum registro encontrado. Selecione uma filial e data para visualizar os registros.
-                </Typography>
+                Nenhum registro encontrado. Selecione uma filial e data para visualizar os registros.
+              </Typography>
               )}
-              <TableContainer component={Paper} sx={{ 
-                maxWidth: '100%', 
-                overflowX: 'auto',
-                '&::-webkit-scrollbar': {
-                  height: '8px',
-                },
-                '&::-webkit-scrollbar-track': {
-                  background: '#f1f1f1',
-                  borderRadius: '4px',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  background: '#888',
-                  borderRadius: '4px',
-                  '&:hover': {
-                    background: '#555',
-                  },
-                },
-              }}>
+                             <TableContainer component={Paper} sx={{ 
+                 maxWidth: '100%', 
+                 overflowX: 'auto',
+                 '&::-webkit-scrollbar': {
+                   height: '8px',
+                 },
+                 '&::-webkit-scrollbar-track': {
+                   background: '#f1f1f1',
+                   borderRadius: '4px',
+                 },
+                 '&::-webkit-scrollbar-thumb': {
+                   background: '#888',
+                   borderRadius: '4px',
+                   '&:hover': {
+                     background: '#555',
+                   },
+                 },
+               }}>
                 <Table sx={{ minWidth: 800, '& .MuiTableCell-root': { padding: '4px 8px' } }}>
-                  <TableHead>
+                                     <TableHead>
                     <TableRow sx={{ 
                       backgroundColor: '#1976d2',
                       '& .MuiTableCell-root': {
@@ -1366,8 +1395,8 @@ const Financeiro: React.FC = () => {
                       }}>
                         Ações
                       </TableCell>
-                    </TableRow>
-                  </TableHead>
+                     </TableRow>
+                   </TableHead>
                   <TableBody>
                     {registrosFinanceiros.map((registro, index) => (
                       <TableRow key={registro.id} sx={{ 
@@ -1401,14 +1430,14 @@ const Financeiro: React.FC = () => {
                               {registro.cliente || 'Nome não informado'}
                             </Typography>
                           )}
-                        </TableCell>
+                                                                          </TableCell>
                         <TableCell sx={{ minWidth: 80 }}>
-                          {registro.editando ? (
-                            <TextField
-                              value={registro.valor}
-                              onChange={(e) => handleChangeRegistro(registro.id, 'valor', e.target.value)}
-                              size="small"
-                              fullWidth
+                           {registro.editando ? (
+                             <TextField
+                               value={registro.valor}
+                               onChange={(e) => handleChangeRegistro(registro.id, 'valor', e.target.value)}
+                               size="small"
+                               fullWidth
                               variant="outlined"
                               InputProps={{
                                 startAdornment: <span style={{ color: '#666', marginRight: '4px', fontSize: '0.7rem' }}>R$</span>,
@@ -1420,34 +1449,34 @@ const Financeiro: React.FC = () => {
                                   fontSize: '0.7rem'
                                 }
                               }}
-                            />
-                          ) : (
+                             />
+                           ) : (
                             <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.7rem' }}>
                               R$ {registro.valor || '0,00'}
                             </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 100 }}>
-                          {registro.editando ? (
+                           )}
+                         </TableCell>
+                         <TableCell sx={{ minWidth: 100 }}>
+                           {registro.editando ? (
                             <FormControl fullWidth size="small">
-                                <Select
+                             <Select
                                   value={registro.tipo_atendimento}
                                   onChange={(e) => handleChangeRegistro(registro.id, 'tipo_atendimento', e.target.value)}
-                                  size="small"
-                                  fullWidth
+                               size="small"
+                               fullWidth
                                   variant="outlined"
                                   sx={{
                                     backgroundColor: '#fff',
                                     height: '28px',
                                     fontSize: '0.7rem'
                                   }}
-                                >
-                                  <MenuItem value="particular">Particular</MenuItem>
-                                  <MenuItem value="convenio">Convênio</MenuItem>
-                                  <MenuItem value="campanha">Campanha</MenuItem>
-                                  <MenuItem value="exames">Exames</MenuItem>
-                                  <MenuItem value="revisao">Revisão</MenuItem>
-                                </Select>
+                             >
+                               <MenuItem value="particular">Particular</MenuItem>
+                               <MenuItem value="convenio">Convênio</MenuItem>
+                               <MenuItem value="campanha">Campanha</MenuItem>
+                               <MenuItem value="exames">Exames</MenuItem>
+                               <MenuItem value="revisao">Revisão</MenuItem>
+                             </Select>
                               </FormControl>
                             ) : (
                               <Chip 
@@ -1466,10 +1495,10 @@ const Financeiro: React.FC = () => {
                                   }
                                 }}
                               />
-                            )}
-                          </TableCell>
+                           )}
+                                                  </TableCell>
                         <TableCell sx={{ minWidth: 180, py: 0.5, pr: 1 }}>
-                          {registro.editando ? (
+                           {registro.editando ? (
                             <Box sx={{ py: 0.3 }}>
                               {(registro.formasPagamento || []).map((forma) => (
                                 <Box key={forma.id} sx={{ 
@@ -1482,11 +1511,11 @@ const Financeiro: React.FC = () => {
                                   <Grid container spacing={0.3} alignItems="center">
                                     <Grid item xs={5}>
                                       <FormControl fullWidth size="small">
-                                        <Select
+                             <Select
                                           value={forma.forma_pagamento}
                                           onChange={(e) => handleChangeFormaPagamento(registro.id, forma.id, 'forma_pagamento', e.target.value)}
-                                          size="small"
-                                          fullWidth
+                               size="small"
+                               fullWidth
                                           variant="outlined"
                                           displayEmpty
                                           sx={{
@@ -1497,10 +1526,10 @@ const Financeiro: React.FC = () => {
                                           <MenuItem value="">
                                             <em>Selecione</em>
                                           </MenuItem>
-                                          <MenuItem value="dinheiro">Dinheiro</MenuItem>
-                                          <MenuItem value="cartao">Cartão</MenuItem>
-                                          <MenuItem value="pix">PIX</MenuItem>
-                                        </Select>
+                               <MenuItem value="dinheiro">Dinheiro</MenuItem>
+                               <MenuItem value="cartao">Cartão</MenuItem>
+                               <MenuItem value="pix">PIX</MenuItem>
+                             </Select>
                                       </FormControl>
                                     </Grid>
                                     <Grid item xs={5}>
@@ -1598,16 +1627,16 @@ const Financeiro: React.FC = () => {
                                 </Box>
                               ))}
                             </Box>
-                          )}
-                        </TableCell>
+                           )}
+                                                  </TableCell>
                         <TableCell sx={{ minWidth: 110, py: 0.5, pr: 1 }}>
-                          {registro.editando ? (
+                           {registro.editando ? (
                             <FormControl fullWidth size="small">
-                                <Select
-                                  value={registro.situacao}
-                                  onChange={(e) => handleChangeRegistro(registro.id, 'situacao', e.target.value)}
-                                  size="small"
-                                  fullWidth
+                             <Select
+                               value={registro.situacao}
+                               onChange={(e) => handleChangeRegistro(registro.id, 'situacao', e.target.value)}
+                               size="small"
+                               fullWidth
                                   variant="outlined"
                                   sx={{
                                     backgroundColor: '#fff',
@@ -1620,12 +1649,12 @@ const Financeiro: React.FC = () => {
                                   <MenuItem value="caso_clinico">Caso Clínico</MenuItem>
                                   <MenuItem value="efetivacao">Efetivação</MenuItem>
                                   <MenuItem value="perda">Perda</MenuItem>
-                                </Select>
+                             </Select>
                               </FormControl>
-                            ) : (
-                              <Chip 
+                           ) : (
+                             <Chip 
                                 label={registro.situacao || 'Não definido'} 
-                                size="small"
+                               size="small"
                                 variant="outlined"
                                 sx={{
                                   backgroundColor: registro.situacao === 'efetivacao' 
@@ -1662,18 +1691,18 @@ const Financeiro: React.FC = () => {
                                       : '#f0f0f0'
                                   }
                                 }}
-                              />
-                            )}
-                          </TableCell>
+                             />
+                           )}
+                                                                           </TableCell>
                           <TableCell sx={{ minWidth: 130, py: 0.5, pr: 1 }}>
-                            {registro.editando ? (
-                              <TextField
-                                value={registro.observacoes}
-                                onChange={(e) => handleChangeRegistro(registro.id, 'observacoes', e.target.value)}
-                                size="small"
-                                fullWidth
+                           {registro.editando ? (
+                             <TextField
+                               value={registro.observacoes}
+                               onChange={(e) => handleChangeRegistro(registro.id, 'observacoes', e.target.value)}
+                               size="small"
+                               fullWidth
                                 variant="outlined"
-                                multiline
+                               multiline
                                 rows={1}
                                 placeholder="Digite as observações..."
                                 sx={{
@@ -1681,23 +1710,23 @@ const Financeiro: React.FC = () => {
                                     backgroundColor: '#fff'
                                   }
                                 }}
-                              />
-                            ) : (
+                             />
+                           ) : (
                               <Typography variant="body2" sx={{ 
                                 color: registro.observacoes ? '#333' : '#999',
                                 fontStyle: registro.observacoes ? 'normal' : 'italic'
                               }}>
                                 {registro.observacoes || 'Sem observações'}
                               </Typography>
-                            )}
-                          </TableCell>
+                           )}
+                                                  </TableCell>
                           <TableCell sx={{ minWidth: 110, py: 0.5, pr: 1 }}>
                             <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                              {registro.editando ? (
+                           {registro.editando ? (
                                 <>
                                   <Tooltip title="Salvar">
-                                    <IconButton
-                                      size="small"
+                               <IconButton
+                                 size="small"
                                       onClick={async () => {
                                         const sucesso = await salvarRegistro(registro);
                                         if (sucesso) {
@@ -1716,12 +1745,12 @@ const Financeiro: React.FC = () => {
                                       }}
                                     >
                                       <SaveIcon fontSize="small" />
-                                    </IconButton>
+                               </IconButton>
                                   </Tooltip>
                                   <Tooltip title="Cancelar">
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => {
+                               <IconButton
+                                 size="small"
+                                 onClick={() => {
                                         // Recarregar dados para cancelar alterações
                                         buscarDados();
                                       }}
@@ -1735,19 +1764,19 @@ const Financeiro: React.FC = () => {
                                       }}
                                     >
                                       <CancelIcon fontSize="small" />
-                                    </IconButton>
+                               </IconButton>
                                   </Tooltip>
                                 </>
-                              ) : (
+                           ) : (
                                 <>
                                   <Tooltip title="Editar">
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => {
-                                        setRegistrosFinanceiros(prev => 
-                                          prev.map(r => r.id === registro.id ? { ...r, editando: true } : r)
-                                        );
-                                      }}
+                               <IconButton
+                                 size="small"
+                                 onClick={() => {
+                                   setRegistrosFinanceiros(prev => 
+                                     prev.map(r => r.id === registro.id ? { ...r, editando: true } : r)
+                                   );
+                                 }}
                                       sx={{
                                         backgroundColor: '#007bff',
                                         color: 'white',
@@ -1758,16 +1787,16 @@ const Financeiro: React.FC = () => {
                                       }}
                                     >
                                       <EditIcon fontSize="small" />
-                                    </IconButton>
+                               </IconButton>
                                   </Tooltip>
                                   <Tooltip title="Excluir">
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => {
-                                        if (window.confirm('Tem certeza que deseja excluir este registro?')) {
-                                          excluirRegistro(registro.id);
-                                        }
-                                      }}
+                               <IconButton
+                                 size="small"
+                                 onClick={() => {
+                                   if (window.confirm('Tem certeza que deseja excluir este registro?')) {
+                                     excluirRegistro(registro.id);
+                                   }
+                                 }}
                                       sx={{
                                         backgroundColor: '#dc3545',
                                         color: 'white',
@@ -1778,12 +1807,12 @@ const Financeiro: React.FC = () => {
                                       }}
                                     >
                                       <DeleteIcon fontSize="small" />
-                                    </IconButton>
+                               </IconButton>
                                   </Tooltip>
                                 </>
-                              )}
+                           )}
                             </Box>
-                          </TableCell>
+                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
