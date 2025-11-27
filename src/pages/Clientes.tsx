@@ -43,9 +43,17 @@ import {
 import { toast } from 'react-toastify';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { 
+  listarClientesCentral, 
+  criarClienteCentral, 
+  atualizarClienteCentral, 
+  excluirClienteCentral,
+  ClienteCentral 
+} from '../services/supabaseCentral';
 
+// Interface local (mantida para compatibilidade com Supabase local)
 interface Client {
-  id: string; // UUID no banco
+  id: string;
   codigo?: string;
   nome: string;
   telefone: string;
@@ -53,14 +61,15 @@ interface Client {
   cpf?: string;
   rg?: string;
   sexo?: 'masculino' | 'feminino' | 'outro' | 'prefiro_nao_informar';
-  endereco?: string | { rua?: string; cidade?: string }; // JSONB no banco
+  endereco?: string | { rua?: string; cidade?: string };
   cidade?: string;
   data_nascimento?: string;
   nome_pai?: string;
   nome_mae?: string;
   foto_url?: string;
   observacoes?: string;
-  active: boolean; // Nome correto no banco é 'active'
+  active: boolean;
+  cadastro_completo?: boolean; // Flag da API central
   created_at: string;
   updated_at: string;
 }
@@ -108,17 +117,33 @@ export function Clientes() {
   const loadClients = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('clientes')
-        .select('*')
-        .order('nome');
-
-      if (error) throw error;
-
-      setClients(data || []);
+      
+      // Buscar clientes do banco CENTRAL
+      const clientesCentralizados = await listarClientesCentral();
+      
+      // Converter para formato local
+      const clientesFormatados: Client[] = clientesCentralizados.map((c: ClienteCentral) => ({
+        id: c.id,
+        codigo: c.codigo,
+        nome: c.nome,
+        telefone: c.telefone,
+        email: c.email,
+        cpf: c.cpf,
+        endereco: c.endereco,
+        cidade: c.cidade,
+        cadastro_completo: c.cadastro_completo,
+        active: c.active ?? true,
+        created_at: c.created_at || new Date().toISOString(),
+        updated_at: c.updated_at || new Date().toISOString()
+      }));
+      
+      // Ordenar por nome
+      clientesFormatados.sort((a, b) => a.nome.localeCompare(b.nome));
+      
+      setClients(clientesFormatados);
     } catch (error: any) {
       console.error('Erro ao carregar clientes:', error);
-      toast.error('Erro ao carregar clientes');
+      toast.error('Erro ao carregar clientes do banco central');
     } finally {
       setLoading(false);
     }
@@ -151,31 +176,25 @@ export function Clientes() {
     try {
       setSubmitting(true);
 
-      const clientData = {
-        ...formData,
-        updated_at: new Date().toISOString()
-      };
-
       if (editingClient) {
-        // Atualizar cliente existente
-        const { error } = await supabase
-          .from('clientes')
-          .update(clientData)
-          .eq('id', editingClient.id);
-
-        if (error) throw error;
+        // Atualizar cliente existente no banco CENTRAL
+        await atualizarClienteCentral(editingClient.id, {
+          nome: formData.nome,
+          telefone: formData.telefone,
+          email: formData.email || undefined,
+          endereco: formData.endereco ? { rua: formData.endereco, cidade: formData.cidade } : undefined,
+          cidade: formData.cidade || undefined,
+          cadastro_completo: true // Marcando como completo ao editar
+        });
         toast.success('Cliente atualizado com sucesso!');
       } else {
-        // Criar novo cliente
-        const { error } = await supabase
-          .from('clientes')
-          .insert([{
-            ...clientData,
-            active: true,
-            created_at: new Date().toISOString()
-          }]);
-
-        if (error) throw error;
+        // Criar novo cliente no banco CENTRAL
+        await criarClienteCentral({
+          nome: formData.nome,
+          telefone: formData.telefone,
+          cidade: formData.cidade || undefined,
+          cadastro_completo: !!(formData.email || formData.endereco || formData.cidade)
+        });
         toast.success('Cliente criado com sucesso!');
       }
 
@@ -183,7 +202,7 @@ export function Clientes() {
       loadClients();
     } catch (error: any) {
       console.error('Erro ao salvar cliente:', error);
-      toast.error('Erro ao salvar cliente');
+      toast.error(error.message || 'Erro ao salvar cliente');
     } finally {
       setSubmitting(false);
     }
@@ -225,72 +244,41 @@ export function Clientes() {
     try {
       setSubmitting(true);
 
-      // Verificar se o cliente tem agendamentos
+      // Verificar se o cliente tem agendamentos no Supabase local
       const { data: appointments, error: appointmentsError } = await supabase
         .from('agendamentos')
         .select('id')
-        .eq('cliente_nome', clientToDelete.nome)
+        .eq('telefone', clientToDelete.telefone) // Buscar por telefone
         .limit(1);
 
       if (appointmentsError) throw appointmentsError;
 
       if (appointments && appointments.length > 0) {
-        // Se tem agendamentos, apenas desativar
-        const { error } = await supabase
-          .from('clientes')
-          .update({ 
-            active: false,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', clientToDelete.id);
-
-        if (error) throw error;
-        toast.success('Cliente desativado com sucesso!');
-      } else {
-        // Se não tem agendamentos, pode excluir
-        const { error } = await supabase
-          .from('clientes')
-          .delete()
-          .eq('id', clientToDelete.id);
-
-        if (error) throw error;
-        toast.success('Cliente excluído com sucesso!');
+        toast.warning('Cliente possui agendamentos e não pode ser excluído!');
+        setDeleteDialogOpen(false);
+        setClientToDelete(null);
+        return;
       }
+
+      // Excluir do banco CENTRAL
+      await excluirClienteCentral(clientToDelete.id);
+      toast.success('Cliente excluído com sucesso!');
 
       setDeleteDialogOpen(false);
       setClientToDelete(null);
       loadClients();
     } catch (error: any) {
       console.error('Erro ao excluir cliente:', error);
-      toast.error('Erro ao excluir cliente');
+      toast.error(error.message || 'Erro ao excluir cliente');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleToggleStatus = async (client: Client) => {
-    try {
-      setSubmitting(true);
-
-      const { error } = await supabase
-        .from('clientes')
-        .update({ 
-          active: !client.active,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', client.id);
-
-      if (error) throw error;
-
-      toast.success(`Cliente ${!client.active ? 'ativado' : 'desativado'} com sucesso!`);
-      loadClients();
-    } catch (error: any) {
-      console.error('Erro ao alterar status:', error);
-      toast.error('Erro ao alterar status do cliente');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // NOTA: Função desabilitada - API central não tem status ativo/inativo ainda
+  // const handleToggleStatus = async (client: Client) => {
+  //   // Implementar quando API central suportar status
+  // };
 
   const handleCloseDialog = () => {
     setDialogOpen(false);
@@ -313,16 +301,16 @@ export function Clientes() {
                          (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesStatus = statusFilter === 'all' || 
-                         (statusFilter === 'active' && client.active) ||
-                         (statusFilter === 'inactive' && !client.active);
+                         (statusFilter === 'completo' && client.cadastro_completo) ||
+                         (statusFilter === 'basico' && !client.cadastro_completo);
     
     return matchesSearch && matchesStatus;
   });
 
   // Estatísticas
   const totalClients = clients.length;
-  const activeClients = clients.filter(c => c.active).length;
-  const inactiveClients = totalClients - activeClients;
+  const completoClients = clients.filter(c => c.cadastro_completo).length;
+  const basicoClients = totalClients - completoClients;
 
   if (loading) {
     return (
@@ -389,10 +377,10 @@ export function Clientes() {
                 <PersonIcon color="success" sx={{ fontSize: 40 }} />
                 <Box>
                   <Typography variant="h4" fontWeight="bold">
-                    {activeClients}
+                    {completoClients}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Clientes Ativos
+                    Cadastros Completos
                   </Typography>
                 </Box>
               </Box>
@@ -403,13 +391,13 @@ export function Clientes() {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <PersonIcon color="error" sx={{ fontSize: 40 }} />
+                <PersonIcon color="warning" sx={{ fontSize: 40 }} />
                 <Box>
                   <Typography variant="h4" fontWeight="bold">
-                    {inactiveClients}
+                    {basicoClients}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Clientes Inativos
+                    Cadastros Básicos
                   </Typography>
                 </Box>
               </Box>
@@ -450,8 +438,8 @@ export function Clientes() {
                   onChange={(e) => setStatusFilter(e.target.value)}
                 >
                   <MenuItem value="all">Todos</MenuItem>
-                  <MenuItem value="active">Ativos</MenuItem>
-                  <MenuItem value="inactive">Inativos</MenuItem>
+                  <MenuItem value="completo">Cadastro Completo</MenuItem>
+                  <MenuItem value="basico">Cadastro Básico</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -509,11 +497,9 @@ export function Clientes() {
                       <TableCell>{client.cidade || '-'}</TableCell>
                       <TableCell>
                         <Chip
-                          label={client.active ? 'Ativo' : 'Inativo'}
-                          color={client.active ? 'success' : 'error'}
+                          label={client.cadastro_completo ? 'Completo' : 'Básico'}
+                          color={client.cadastro_completo ? 'success' : 'warning'}
                           size="small"
-                          onClick={() => handleToggleStatus(client)}
-                          sx={{ cursor: 'pointer' }}
                         />
                       </TableCell>
                       <TableCell>

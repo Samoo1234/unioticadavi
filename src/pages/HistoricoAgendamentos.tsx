@@ -45,11 +45,13 @@ interface Filial {
 }
 
 interface Agendamento {
-  id: number;
-  cliente_id: number | null;
-  medico_id: number | null;
-  filial_id: number | null;
-  data_hora: string;
+  id: string; // UUID
+  nome: string; // Nome do cliente (diretamente na tabela)
+  telefone: string; // Telefone do cliente (diretamente na tabela)
+  cidade: string;
+  data: string; // Data separada
+  horario: string; // Horário separado
+  medico_id: string | null;
   status: string;
   tipo_consulta: string | null;
   observacoes: string | null;
@@ -57,11 +59,7 @@ interface Agendamento {
   forma_pagamento: string | null;
   created_at: string;
   updated_at: string;
-  // Dados relacionados
-  cliente?: {
-    nome: string;
-    telefone: string | null;
-  };
+  // Dados relacionados (apenas médico e filial - clientes estão no banco central)
   medico?: {
     nome: string;
   };
@@ -127,21 +125,18 @@ const HistoricoAgendamentos: React.FC = () => {
         .from('agendamentos')
         .select(`
           *,
-          cliente:clientes(nome, telefone),
-          medico:medicos(nome),
-          filial:filiais(nome)
+          medico:medicos(nome)
         `)
-        .order('data_hora', { ascending: false });
+        .order('data', { ascending: false })
+        .order('horario', { ascending: false });
 
       // Aplicar filtros
       if (filtros.dataInicio) {
-        query = query.gte('data_hora', filtros.dataInicio.toISOString());
+        query = query.gte('data', filtros.dataInicio.toISOString().split('T')[0]);
       }
 
       if (filtros.dataFim) {
-        const dataFimFinal = new Date(filtros.dataFim);
-        dataFimFinal.setHours(23, 59, 59, 999);
-        query = query.lte('data_hora', dataFimFinal.toISOString());
+        query = query.lte('data', filtros.dataFim.toISOString().split('T')[0]);
       }
 
       if (filtros.filialId) {
@@ -162,8 +157,8 @@ const HistoricoAgendamentos: React.FC = () => {
       if (filtros.busca) {
         const termoBusca = filtros.busca.toLowerCase();
         agendamentosProcessados = agendamentosProcessados.filter(agendamento => {
-          const nomeCliente = agendamento.cliente?.nome?.toLowerCase() || '';
-          const telefoneCliente = agendamento.cliente?.telefone?.toLowerCase() || '';
+          const nomeCliente = agendamento.nome?.toLowerCase() || '';
+          const telefoneCliente = agendamento.telefone?.toLowerCase() || '';
           return nomeCliente.includes(termoBusca) || telefoneCliente.includes(termoBusca);
         });
       }
@@ -226,13 +221,6 @@ const HistoricoAgendamentos: React.FC = () => {
       month: '2-digit',
       year: 'numeric'
     });
-  };
-
-  // Formatar horário
-  const formatarHorario = (dataString: string) => {
-    if (!dataString) return '';
-    const data = new Date(dataString);
-    return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
 
   // Obter cor do status
@@ -320,11 +308,11 @@ const HistoricoAgendamentos: React.FC = () => {
       
       agendamentosFiltrados.forEach(agendamento => {
         const linha = [
-          agendamento.cliente?.nome || '',
-          agendamento.cliente?.telefone || '',
-          agendamento.filial?.nome || '',
-          formatarData(agendamento.data_hora),
-          formatarHorario(agendamento.data_hora),
+          agendamento.nome || '',
+          agendamento.telefone || '',
+          agendamento.cidade || '',
+          agendamento.data ? new Date(agendamento.data + 'T00:00:00').toLocaleDateString('pt-BR') : '',
+          agendamento.horario || '',
           obterTextoStatus(agendamento.status),
           agendamento.observacoes || ''
         ];
@@ -555,11 +543,11 @@ const HistoricoAgendamentos: React.FC = () => {
                     <TableBody>
                       {itensAtuais.map((agendamento) => (
                         <TableRow key={agendamento.id}>
-                          <TableCell>{agendamento.cliente?.nome || ''}</TableCell>
-                          <TableCell>{agendamento.cliente?.telefone || ''}</TableCell>
-                          <TableCell>{agendamento.filial?.nome || ''}</TableCell>
-                          <TableCell>{formatarData(agendamento.data_hora)}</TableCell>
-                          <TableCell>{formatarHorario(agendamento.data_hora)}</TableCell>
+                          <TableCell>{agendamento.nome || ''}</TableCell>
+                          <TableCell>{agendamento.telefone || ''}</TableCell>
+                          <TableCell>{agendamento.cidade || ''}</TableCell>
+                          <TableCell>{agendamento.data ? new Date(agendamento.data + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</TableCell>
+                          <TableCell>{agendamento.horario || ''}</TableCell>
                           <TableCell>
                             <Chip
                               label={obterTextoStatus(agendamento.status)}

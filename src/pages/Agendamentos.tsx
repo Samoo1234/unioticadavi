@@ -46,6 +46,12 @@ import { toast } from 'react-toastify';
 import { supabase } from '../services/supabase';
 import jsPDF from 'jspdf';
 import { WebcamCapture } from '../components/WebcamCapture';
+import { 
+  supabaseCentral, 
+  buscarClientePorTelefone, 
+  criarClienteCentral,
+  gerarCodigoCliente 
+} from '../services/supabaseCentral';
 // DatePicker removido - não usado mais no modal
 
 
@@ -135,6 +141,8 @@ export function Agendamentos() {
   const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
   const [formData, setFormData] = useState<AppointmentFormData>(initialFormData);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof AppointmentFormData, string>>>({});
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [clienteEncontrado, setClienteEncontrado] = useState<boolean | null>(null);
 
   // Client registration dialog states
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
@@ -178,6 +186,50 @@ export function Agendamentos() {
     } catch (error: any) {
       console.error('Erro ao carregar filiais:', error);
       toast.error('Erro ao carregar filiais');
+    }
+  };
+
+  /**
+   * Buscar cliente no banco central por telefone
+   * Se não existir, cria um cadastro básico (nome + telefone)
+   */
+  const buscarOuCriarCliente = async (telefone: string, nome: string) => {
+    try {
+      setBuscandoCliente(true);
+      
+      // Limpar telefone (remover caracteres especiais)
+      const telefoneLimpo = telefone.replace(/\D/g, '');
+      
+      if (telefoneLimpo.length < 10) {
+        return; // Telefone incompleto
+      }
+      
+      // Buscar cliente existente no banco central
+      const clienteExistente = await buscarClientePorTelefone(telefone);
+      
+      if (clienteExistente) {
+        // Cliente encontrado - preencher nome automaticamente
+        setFormData(prev => ({ ...prev, nome: clienteExistente.nome }));
+        setClienteEncontrado(true);
+        toast.info(`Cliente encontrado: ${clienteExistente.nome}`);
+      } else if (nome.trim()) {
+        // Cliente não existe e temos nome - criar cadastro básico no banco central
+        await criarClienteCentral({
+          nome: nome.trim(),
+          telefone: telefone,
+          cadastro_completo: false
+        });
+        setClienteEncontrado(false);
+        toast.success('Cliente cadastrado no sistema central!');
+      } else {
+        setClienteEncontrado(false);
+      }
+    } catch (error: any) {
+      console.error('Erro ao buscar/criar cliente:', error);
+      // Não mostrar erro ao usuário - apenas log
+      setClienteEncontrado(null);
+    } finally {
+      setBuscandoCliente(false);
     }
   };
 
@@ -294,6 +346,24 @@ export function Agendamentos() {
         
         if (agendamentos && agendamentos.length > 0) {
           throw new Error('Este horário já está agendado. Por favor, escolha outro.');
+        }
+
+        // Garantir que cliente existe no banco central
+        try {
+          const clienteExistente = await buscarClientePorTelefone(formData.telefone);
+          if (!clienteExistente) {
+            // Criar cliente no banco central
+            await criarClienteCentral({
+              nome: formData.nome,
+              telefone: formData.telefone,
+              cidade: filialSelecionada.nome,
+              cadastro_completo: false
+            });
+            console.log('✅ Cliente criado no banco central');
+          }
+        } catch (apiError) {
+          console.warn('Erro ao sincronizar cliente com banco central:', apiError);
+          // Continuar mesmo se falhar - não bloquear agendamento
         }
 
         const appointmentData = {
@@ -418,6 +488,9 @@ export function Agendamentos() {
     setDatasDisponiveis([]);
     setHorariosDisponiveis([]);
     setSelectedCityDoctor(0);
+    // Limpar estados de busca de cliente
+    setBuscandoCliente(false);
+    setClienteEncontrado(null);
   };
 
   // Funções para cadastro de cliente
@@ -491,65 +564,69 @@ export function Agendamentos() {
     try {
       setSubmitting(true);
 
-      // Verificar se o cliente já existe pelo telefone ou CPF
-      let query = supabase.from('clientes').select('*');
+      // Verificar se o cliente já existe no banco CENTRAL pelo telefone ou CPF
+      let existingClient = null;
       
       if (clientFormData.cpf) {
-        query = query.eq('cpf', clientFormData.cpf);
-      } else {
-        query = query.eq('telefone', clientFormData.telefone);
+        const { data } = await supabaseCentral
+          .from('clientes')
+          .select('*')
+          .eq('cpf', clientFormData.cpf)
+          .limit(1)
+          .single();
+        existingClient = data;
+      }
+      
+      if (!existingClient) {
+        const { data } = await supabaseCentral
+          .from('clientes')
+          .select('*')
+          .eq('telefone', clientFormData.telefone.replace(/\D/g, ''))
+          .limit(1)
+          .single();
+        existingClient = data;
       }
 
-      const { data: existingClients, error: checkError } = await query;
+      if (existingClient) {
+        // Cliente já existe - atualizar para cadastro completo
+        const codigoCliente = existingClient.codigo || await gerarCodigoCliente(clientFormData.cidade);
+        
+        const { error: updateError } = await supabaseCentral
+          .from('clientes')
+          .update({
+            codigo: codigoCliente,
+            nome: clientFormData.nome,
+            email: clientFormData.email || null,
+            cpf: clientFormData.cpf || null,
+            rg: clientFormData.rg || null,
+            sexo: clientFormData.sexo || null,
+            data_nascimento: clientFormData.data_nascimento || null,
+            nome_pai: clientFormData.nome_pai || null,
+            nome_mae: clientFormData.nome_mae || null,
+            cidade: clientFormData.cidade || null,
+            endereco: clientFormData.endereco ? { rua: clientFormData.endereco, cidade: clientFormData.cidade } : null,
+            foto_url: clientFormData.foto_url || null,
+            observacoes: clientFormData.observacoes || null,
+            cadastro_completo: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingClient.id);
 
-      if (checkError) throw checkError;
+        if (updateError) throw updateError;
 
-      if (existingClients && existingClients.length > 0) {
-        toast.warning('Cliente já cadastrado no sistema!');
-        setSubmitting(false);
+        toast.success(`Cliente atualizado com cadastro completo! Código: ${codigoCliente}`);
+        handleCloseClientDialog();
         return;
       }
 
-      // Gerar código único para o cliente baseado na cidade (formato: XXX-NNNN)
-      // Mapeamento de cidades para iniciais
-      const cidadeParaIniciais: { [key: string]: string } = {
-        'Mantena': 'MAN',
-        'Mantenópolis': 'MTP',
-        'Central de Minas': 'CDM',
-        'Alto Rio Novo': 'ARN',
-        'São João do Manteninha': 'SJM'
-      };
+      // Cliente não existe - criar novo com cadastro completo
+      const codigoCliente = await gerarCodigoCliente(clientFormData.cidade);
 
-      const iniciaisCidade = cidadeParaIniciais[clientFormData.cidade] || 'CLI';
-      
-      // Buscar o último código da cidade para incrementar
-      const { data: ultimoCliente, error: ultimoError } = await supabase
-        .from('clientes')
-        .select('codigo')
-        .like('codigo', `${iniciaisCidade}-%`)
-        .order('codigo', { ascending: false })
-        .limit(1);
-
-      if (ultimoError) throw ultimoError;
-
-      let numeroSequencial = 1;
-      if (ultimoCliente && ultimoCliente.length > 0 && ultimoCliente[0].codigo) {
-        const ultimoCodigo = ultimoCliente[0].codigo;
-        if (ultimoCodigo.includes('-')) {
-          const ultimoNumero = parseInt(ultimoCodigo.split('-')[1]);
-          if (!isNaN(ultimoNumero)) {
-            numeroSequencial = ultimoNumero + 1;
-          }
-        }
-      }
-
-      const codigoCliente = `${iniciaisCidade}-${numeroSequencial.toString().padStart(4, '0')}`;
-
-      // Preparar dados do cliente
+      // Preparar dados do cliente para o banco CENTRAL
       const clientData = {
         codigo: codigoCliente,
         nome: clientFormData.nome,
-        telefone: clientFormData.telefone,
+        telefone: clientFormData.telefone.replace(/\D/g, ''),
         email: clientFormData.email || null,
         cpf: clientFormData.cpf || null,
         rg: clientFormData.rg || null,
@@ -561,12 +638,13 @@ export function Agendamentos() {
         endereco: clientFormData.endereco ? { rua: clientFormData.endereco, cidade: clientFormData.cidade } : null,
         foto_url: clientFormData.foto_url || null,
         observacoes: clientFormData.observacoes || null,
+        cadastro_completo: true, // Cadastro completo desde já
         active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      const { error: insertError } = await supabase
+      const { error: insertError } = await supabaseCentral
         .from('clientes')
         .insert([clientData]);
 
@@ -738,6 +816,15 @@ export function Agendamentos() {
     if (field === 'telefone') {
       const formattedPhone = formatPhoneNumber(value as string);
       setFormData(prev => ({ ...prev, [field]: formattedPhone }));
+      
+      // Buscar cliente automaticamente quando telefone estiver completo
+      const telefoneLimpo = formattedPhone.replace(/\D/g, '');
+      if (telefoneLimpo.length === 11 || telefoneLimpo.length === 10) {
+        // Telefone completo - buscar cliente
+        buscarOuCriarCliente(formattedPhone, formData.nome);
+      } else {
+        setClienteEncontrado(null);
+      }
     } else if (field === 'filial_id' || field === 'data_id') {
       // Campos numéricos
       setFormData(prev => ({ ...prev, [field]: typeof value === 'number' ? value : Number(value) }));
@@ -1337,14 +1424,25 @@ export function Agendamentos() {
                 value={formData.telefone}
                 onChange={(e) => handleInputChange('telefone', e.target.value)}
                 error={!!formErrors.telefone}
-                helperText={formErrors.telefone}
+                helperText={
+                  formErrors.telefone ||
+                  (buscandoCliente ? 'Buscando cliente...' : '') ||
+                  (clienteEncontrado === true ? 'Cliente encontrado no sistema!' : '') ||
+                  (clienteEncontrado === false ? 'Novo cliente será cadastrado' : '')
+                }
                 placeholder="(99) 99999-9999"
+                color={clienteEncontrado === true ? 'success' : undefined}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <PhoneIcon />
+                      <PhoneIcon color={clienteEncontrado === true ? 'success' : undefined} />
                     </InputAdornment>
                   ),
+                  endAdornment: buscandoCliente ? (
+                    <InputAdornment position="end">
+                      <CircularProgress size={20} />
+                    </InputAdornment>
+                  ) : null,
                 }}
               />
             </Grid>

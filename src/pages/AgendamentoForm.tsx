@@ -26,6 +26,7 @@ import {
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { buscarClientePorTelefone, criarClienteCentral } from '../services/supabaseCentral';
 import { formatarDataComDiaSemana } from '../utils/dateUtils';
 
 interface Filial {
@@ -418,6 +419,21 @@ export default function AgendamentoForm() {
         
         if (agendamentos && agendamentos.length > 0) {
           throw new Error('Este horário já está agendado. Por favor, escolha outro.');
+        }
+
+        // Criar cliente no banco central (se não existir)
+        try {
+          const clienteExistente = await buscarClientePorTelefone(formData.telefone);
+          if (!clienteExistente) {
+            await criarClienteCentral({
+              nome: formData.nome,
+              telefone: formData.telefone,
+              cidade: filialSelecionada.nome,
+              cadastro_completo: false
+            });
+          }
+        } catch (clienteError) {
+          // Continuar mesmo se falhar - não bloquear agendamento
         }
 
         const appointmentData = {
