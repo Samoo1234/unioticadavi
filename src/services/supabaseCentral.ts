@@ -133,10 +133,14 @@ export const buscarClientePorId = async (id: string): Promise<ClienteCentral | n
 
 // Criar cliente (cadastro mínimo)
 export const criarClienteCentral = async (dados: CriarClienteCentralDTO): Promise<ClienteCentral> => {
+  // Gerar código único baseado na cidade
+  const codigo = dados.cidade ? await gerarCodigoCliente(dados.cidade) : null;
+  
   const clienteData = {
     nome: dados.nome,
     telefone: dados.telefone.replace(/\D/g, ''), // Limpar telefone
     cidade: dados.cidade || null,
+    codigo: codigo,
     cadastro_completo: dados.cadastro_completo ?? false,
     active: true,
     created_at: new Date().toISOString(),

@@ -226,7 +226,7 @@ export function Agendamentos() {
       }
     } catch (error: any) {
       console.error('Erro ao buscar/criar cliente:', error);
-      // Não mostrar erro ao usuário - apenas log
+      toast.warning('Erro ao sincronizar com banco central');
       setClienteEncontrado(null);
     } finally {
       setBuscandoCliente(false);
@@ -361,8 +361,9 @@ export function Agendamentos() {
             });
             console.log('✅ Cliente criado no banco central');
           }
-        } catch (apiError) {
+        } catch (apiError: any) {
           console.warn('Erro ao sincronizar cliente com banco central:', apiError);
+          toast.warning('Cliente não foi sincronizado com banco central');
           // Continuar mesmo se falhar - não bloquear agendamento
         }
 
