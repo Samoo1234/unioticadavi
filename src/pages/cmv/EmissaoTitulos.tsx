@@ -28,7 +28,14 @@ import {
   Pagination,
   Select,
   FormControl,
-  InputLabel
+  InputLabel,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper
 } from '@mui/material'
 import {
   Delete as DeleteIcon,
@@ -563,6 +570,70 @@ const EmissaoTitulos: React.FC = () => {
     setPaginaAtual(1)
   }
 
+  // Calcular resumo por tipo e filial
+  const calcularResumo = () => {
+    const resumo: { [tipo: string]: { [filial: string]: { quantidade: number; valorTotal: number; valorPago: number; valorPendente: number } } } = {}
+    const totaisPorFilial: { [filial: string]: { quantidade: number; valorTotal: number; valorPago: number; valorPendente: number } } = {}
+    const totaisPorTipo: { [tipo: string]: { quantidade: number; valorTotal: number; valorPago: number; valorPendente: number } } = {}
+    
+    // Usar títulos filtrados para o resumo
+    titulosFiltrados.forEach(titulo => {
+      const tipo = titulo.tipo || 'Não especificado'
+      const filial = titulo.filial || 'Não especificada'
+      const valor = parseFloat(titulo.valor) || 0
+      const valorComMultaJuros = valor + (titulo.multa || 0) + (titulo.juros || 0)
+      const isPago = titulo.status === 'pago'
+      
+      // Inicializar tipo se não existir
+      if (!resumo[tipo]) {
+        resumo[tipo] = {}
+        totaisPorTipo[tipo] = { quantidade: 0, valorTotal: 0, valorPago: 0, valorPendente: 0 }
+      }
+      
+      // Inicializar filial dentro do tipo se não existir
+      if (!resumo[tipo][filial]) {
+        resumo[tipo][filial] = { quantidade: 0, valorTotal: 0, valorPago: 0, valorPendente: 0 }
+      }
+      
+      // Inicializar totais por filial se não existir
+      if (!totaisPorFilial[filial]) {
+        totaisPorFilial[filial] = { quantidade: 0, valorTotal: 0, valorPago: 0, valorPendente: 0 }
+      }
+      
+      // Acumular valores
+      resumo[tipo][filial].quantidade++
+      resumo[tipo][filial].valorTotal += valorComMultaJuros
+      totaisPorTipo[tipo].quantidade++
+      totaisPorTipo[tipo].valorTotal += valorComMultaJuros
+      totaisPorFilial[filial].quantidade++
+      totaisPorFilial[filial].valorTotal += valorComMultaJuros
+      
+      if (isPago) {
+        resumo[tipo][filial].valorPago += valorComMultaJuros
+        totaisPorTipo[tipo].valorPago += valorComMultaJuros
+        totaisPorFilial[filial].valorPago += valorComMultaJuros
+      } else {
+        resumo[tipo][filial].valorPendente += valorComMultaJuros
+        totaisPorTipo[tipo].valorPendente += valorComMultaJuros
+        totaisPorFilial[filial].valorPendente += valorComMultaJuros
+      }
+    })
+    
+    return { resumo, totaisPorFilial, totaisPorTipo }
+  }
+  
+  const { resumo, totaisPorFilial, totaisPorTipo } = calcularResumo()
+  const tiposOrdenados = Object.keys(resumo).sort()
+  const filiaisOrdenadas = Object.keys(totaisPorFilial).sort()
+  
+  // Calcular total geral
+  const totalGeral = {
+    quantidade: titulosFiltrados.length,
+    valorTotal: Object.values(totaisPorFilial).reduce((acc, f) => acc + f.valorTotal, 0),
+    valorPago: Object.values(totaisPorFilial).reduce((acc, f) => acc + f.valorPago, 0),
+    valorPendente: Object.values(totaisPorFilial).reduce((acc, f) => acc + f.valorPendente, 0)
+  }
+
   // Funções para ações
   const handlePagar = (id: number) => {
     // Em vez de processar o pagamento imediatamente, abrimos o modal
@@ -589,14 +660,37 @@ const EmissaoTitulos: React.FC = () => {
     return (Math.round(num * 100) / 100).toFixed(2)
   }
   
-  // Substituir setMulta e setJuros para aceitar apenas até duas casas decimais
-  const handleMultaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let valor = e.target.value.replace(',', '.')
-    if (/^\d*(\.\d{0,2})?$/.test(valor)) setMulta(valor)
+  // Validação de valor monetário (aceita números com até 2 casas decimais)
+  const validarValorMonetario = (valor: string): boolean => {
+    if (valor === '' || valor === '0') return true
+    // Aceita: 10, 10.5, 10.50, 10,5, 10,50
+    return /^\d+([.,]\d{0,2})?$/.test(valor)
   }
+  
+  const formatarValorMonetario = (valor: string): string => {
+    // Remove caracteres inválidos e converte vírgula para ponto
+    let valorLimpo = valor.replace(/[^0-9.,]/g, '').replace(',', '.')
+    // Remove pontos extras (mantém só o primeiro)
+    const partes = valorLimpo.split('.')
+    if (partes.length > 2) {
+      valorLimpo = partes[0] + '.' + partes.slice(1).join('')
+    }
+    return valorLimpo
+  }
+  
+  // Substituir setMulta e setJuros para aceitar apenas valores monetários válidos
+  const handleMultaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valorFormatado = formatarValorMonetario(e.target.value)
+    if (validarValorMonetario(valorFormatado)) {
+      setMulta(valorFormatado)
+    }
+  }
+  
   const handleJurosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let valor = e.target.value.replace(',', '.')
-    if (/^\d*(\.\d{0,2})?$/.test(valor)) setJuros(valor)
+    const valorFormatado = formatarValorMonetario(e.target.value)
+    if (validarValorMonetario(valorFormatado)) {
+      setJuros(valorFormatado)
+    }
   }
   
   // Função para finalizar o pagamento normal (sem multa/juros)
@@ -1106,6 +1200,103 @@ const EmissaoTitulos: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Tabela Resumo por Tipo e Filial */}
+      {titulosFiltrados.length > 0 && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Resumo por Tipo e Filial
+            </Typography>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Tipo</TableCell>
+                    {filiaisOrdenadas.map(filial => (
+                      <TableCell key={filial} align="right" sx={{ fontWeight: 'bold' }}>
+                        {filial}
+                      </TableCell>
+                    ))}
+                    <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>
+                      Total por Tipo
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {tiposOrdenados.map(tipo => (
+                    <TableRow key={tipo} hover>
+                      <TableCell sx={{ fontWeight: 500 }}>{tipo}</TableCell>
+                      {filiaisOrdenadas.map(filial => {
+                        const dados = resumo[tipo]?.[filial]
+                        return (
+                          <TableCell key={filial} align="right">
+                            {dados ? (
+                              <Box>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  R$ {dados.valorTotal.toFixed(2)}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {dados.quantidade} título(s)
+                                </Typography>
+                                {dados.valorPendente > 0 && (
+                                  <Typography variant="caption" color="warning.main" display="block">
+                                    Pend: R$ {dados.valorPendente.toFixed(2)}
+                                  </Typography>
+                                )}
+                              </Box>
+                            ) : '-'}
+                          </TableCell>
+                        )
+                      })}
+                      <TableCell align="right" sx={{ backgroundColor: '#e3f2fd' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                          R$ {totaisPorTipo[tipo]?.valorTotal.toFixed(2) || '0.00'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {totaisPorTipo[tipo]?.quantidade || 0} título(s)
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {/* Linha de totais por filial */}
+                  <TableRow sx={{ backgroundColor: '#e8f5e9' }}>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Total por Filial</TableCell>
+                    {filiaisOrdenadas.map(filial => (
+                      <TableCell key={filial} align="right">
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                          R$ {totaisPorFilial[filial]?.valorTotal.toFixed(2) || '0.00'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {totaisPorFilial[filial]?.quantidade || 0} título(s)
+                        </Typography>
+                        {totaisPorFilial[filial]?.valorPendente > 0 && (
+                          <Typography variant="caption" color="warning.main" display="block">
+                            Pend: R$ {totaisPorFilial[filial].valorPendente.toFixed(2)}
+                          </Typography>
+                        )}
+                      </TableCell>
+                    ))}
+                    <TableCell align="right" sx={{ backgroundColor: '#c8e6c9' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                        R$ {totalGeral.valorTotal.toFixed(2)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {totalGeral.quantidade} título(s)
+                      </Typography>
+                      {totalGeral.valorPendente > 0 && (
+                        <Typography variant="caption" color="warning.main" display="block">
+                          Pend: R$ {totalGeral.valorPendente.toFixed(2)}
+                        </Typography>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Lista de títulos */}
       <Card>
         <CardContent>
@@ -1265,6 +1456,8 @@ const EmissaoTitulos: React.FC = () => {
               value={multa}
               onChange={handleMultaChange}
               fullWidth
+              placeholder="0.00"
+              helperText="Ex: 10.50"
               InputProps={{
                 startAdornment: <InputAdornment position="start">R$</InputAdornment>,
               }}
@@ -1276,6 +1469,8 @@ const EmissaoTitulos: React.FC = () => {
               value={juros}
               onChange={handleJurosChange}
               fullWidth
+              placeholder="0.00"
+              helperText="Ex: 3.00"
               InputProps={{
                 startAdornment: <InputAdornment position="start">R$</InputAdornment>,
               }}
@@ -1319,6 +1514,8 @@ const EmissaoTitulos: React.FC = () => {
                 value={multa}
                 onChange={handleMultaChange}
                 fullWidth
+                placeholder="0.00"
+                helperText="Ex: 10.50"
                 InputProps={{
                   startAdornment: <InputAdornment position="start">R$</InputAdornment>,
                 }}
@@ -1330,6 +1527,8 @@ const EmissaoTitulos: React.FC = () => {
                 value={juros}
                 onChange={handleJurosChange}
                 fullWidth
+                placeholder="0.00"
+                helperText="Ex: 3.00"
                 InputProps={{
                   startAdornment: <InputAdornment position="start">R$</InputAdornment>,
                 }}
