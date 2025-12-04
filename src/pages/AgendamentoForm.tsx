@@ -443,7 +443,8 @@ export default function AgendamentoForm() {
           nome: formData.nome,
           telefone: formData.telefone,
           observacoes: formData.observacoes || '',
-          status: 'pendente'
+          status: 'pendente',
+          medico_id: dataSelecionada.medico_id || null
         };
 
         const { error } = await supabase
